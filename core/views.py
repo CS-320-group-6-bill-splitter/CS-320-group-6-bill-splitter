@@ -3,7 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
-from .models import User
+from .models import User, Household
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from .serializers import HouseholdSerializer
 
 # endpoints
 
@@ -51,7 +57,14 @@ def logout_view(request):
     # list of amounts owed by users
     # list of bills for household
 
-# create household
+class HouseholdListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all existing households"""
+        households = request.user.households.all()
+        serializer = HouseholdSerializer(households, many=True)
+        return Response(serializer.data)
 
 # add user to household
 
