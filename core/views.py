@@ -66,6 +66,17 @@ class HouseholdListCreateView(APIView):
         serializer = HouseholdSerializer(households, many=True)
         return Response(serializer.data)
 
+    def post(self, request):
+        """Create a new household"""
+        serializer = HouseholdSerializer(data=request.data)
+        if serializer.is_valid():
+            household = Household.objects.create_household(
+                household_name=serializer.validated_data['name'],
+                created_by=request.user
+            )
+            return Response(HouseholdSerializer(household).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 # add user to household
 
 # create bill form
