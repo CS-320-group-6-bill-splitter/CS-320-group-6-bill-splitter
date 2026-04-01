@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BillSplitter",
+  title: "Splitseas",
   description: "Split bills with your groups",
 };
 
