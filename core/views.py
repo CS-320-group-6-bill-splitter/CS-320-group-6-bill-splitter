@@ -49,7 +49,7 @@ def logout_view(request):
     logout(request)
     return JsonResponse({'message': 'Logged out successfully'})
 
-# update user? display name, add/change profile image
+# update user: display name, add/change profile image
 
 # if logged in, serve the home page (list of households)
 
