@@ -68,8 +68,10 @@ class BillManager(models.Manager):
             date_created=date_created,
             user_owed=user_owed
         )
-        for debt in debts:
-            bill.debts.add(debt) // TODO: fix once Debt model is implemented
+        for user_id, amount in debts.items():
+            user = User.objects.get(pk=user_id)
+            debt = DebtManager().create_debt(amount, user, bill)
+            bill.debts.add(debt)
         bill.save(using=self._db)
         return bill
 
@@ -92,13 +94,13 @@ class Bill(models.Model):
     def get_total_amount(self):
         """Calculate and return the total amount owed for this bill."""
         total = 0
-        for debt in self.debts.all(): // TODO: fix once Debt model is implemented
+        for debt in self.debts.all():
             total += debt.amount
         return total
     
     def update(self, name=None, user_owed=None, debts=None):
         """Update this bill's resolved flag."""
-        self.resolved = all(debt.is_resolved for debt in self.debts.all()) // TODO: fix once Debt model is implemented
+        self.resolved = all(debt.is_resolved for debt in self.debts.all())
         self.save()
 
 
