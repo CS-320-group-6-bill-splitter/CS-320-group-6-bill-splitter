@@ -77,6 +77,43 @@ class HouseholdListCreateView(APIView):
             return Response(HouseholdSerializer(household).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class HouseholdDetailView(APIView):
+    """
+    GET    /households/<id>/      → retrieve a household
+    PATCH  /households/<id>/      → update a household's name
+    # DELETE removed — households are deleted automatically when all members leave
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        return get_object_or_404(Household, pk=pk, members=user)
+
+    def get(self, request, pk):
+        household = self.get_object(pk, request.user)
+        serializer = HouseholdSerializer(household)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        household = self.get_object(pk, request.user)
+        serializer = HouseholdSerializer(household, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class HouseholdLeaveView(APIView):
+    """
+    POST /households/<id>/leave/  → remove the requesting user from the household.
+                                    Deletes the household if they were the last member.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        household = get_object_or_404(Household, pk=pk, members=request.user)
+        household.remove_member(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 # add user to household
 
 # create bill form

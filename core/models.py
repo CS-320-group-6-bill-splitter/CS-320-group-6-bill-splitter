@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
-from bill_splitter import settings
+from bill_splitter.settings import AUTH_USER_MODEL
 
 
 # Create your models here.
@@ -13,14 +13,14 @@ class HouseholdManager(models.Manager):
         household.members.add(created_by) # add creator as a member
         return household
 
-class Household():
+class Household(models.Model):
     """name: name for the household.
     members: set of users who belong to the household"""
     objects = HouseholdManager()
 
     name = models.CharField(max_length=200)
     members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
+        AUTH_USER_MODEL,
         related_name='households',
         blank=True)
 
@@ -32,6 +32,8 @@ class Household():
 
     def remove_member(self, user):
         self.members.remove(user)
+        if self.members.count()==0:
+            self.delete()
 
     def get_members(self):
         return self.members.all()
@@ -39,6 +41,8 @@ class Household():
     def get_summary(self):
         # to be added once bill/debts models are complete
         return self.members.all()
+
+
 class UserManager(BaseUserManager):
     """Custom user manager to handle user creation and superuser creation."""
 

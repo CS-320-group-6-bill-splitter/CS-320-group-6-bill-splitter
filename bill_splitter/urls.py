@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from core import views
-from core.views import HouseholdListCreateView #, HouseholdDetailView
+from core.views import HouseholdListCreateView, HouseholdDetailView, HouseholdLeaveView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +27,6 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
 
     path('households/', HouseholdListCreateView.as_view(), name='household-list-create'),
+    path('households/<int:pk>/', HouseholdDetailView.as_view(), name='household-detail'),
+    path('households/<int:pk>/leave/', HouseholdLeaveView.as_view(), name='household-leave'),
 ]
