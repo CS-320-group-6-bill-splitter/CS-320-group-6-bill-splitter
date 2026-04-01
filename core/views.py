@@ -51,6 +51,7 @@ def logout_view(request):
 
 # update user: display name, add/change profile image
 
+
 # if logged in, serve the home page (list of households)
 
 # dashboard for specific household
