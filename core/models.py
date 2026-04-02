@@ -13,7 +13,7 @@ class HouseholdManager(models.Manager):
         household.members.add(created_by) # add creator as a member
         return household
 
-class Household():
+class Household(models.Model):
     """name: name for the household.
     members: set of users who belong to the household"""
     objects = HouseholdManager()
@@ -39,6 +39,8 @@ class Household():
     def get_summary(self):
         # to be added once bill/debts models are complete
         return self.members.all()
+
+
 class UserManager(BaseUserManager):
     """Custom user manager to handle user creation and superuser creation."""
 
