@@ -102,6 +102,16 @@ class HouseholdDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class HouseholdSummaryView(APIView):
+    """ GET return household summary for the authenticated user (see Household.get_summary) """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        household = get_object_or_404(Household, pk=pk, members=request.user)
+        summary = household.get_summary(request.user)
+        return Response(summary)
+
+
 class HouseholdLeaveView(APIView):
     """
     POST /households/<id>/leave/  → remove the requesting user from the household.

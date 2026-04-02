@@ -38,9 +38,32 @@ class Household(models.Model):
     def get_members(self):
         return self.members.all()
 
-    def get_summary(self):
-        # to be added once bill/debts models are complete
-        return self.members.all()
+    def get_summary(self, current_user):
+        """Return a dict keyed by user id for each household member other than
+        current_user. Each value contains the member's display_name, how much
+        they owe current_user, and how much current_user owes them"""
+        summary = {}
+        for member in self.members.exclude(pk=current_user.pk):
+            they_owe_me = Debt.objects.filter(
+                bill__household=self,
+                bill__user_owed=current_user,
+                user_owing=member,
+                is_resolved=False
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+            i_owe_them = Debt.objects.filter(
+                bill__household=self,
+                bill__user_owed=member,
+                user_owing=current_user,
+                is_resolved=False
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+            summary[member.pk] = {
+                'display_name': member.display_name,
+                'they_owe_me': they_owe_me,
+                'i_owe_them': i_owe_them,
+            }
+        return summary
 
 
 class UserManager(BaseUserManager):
