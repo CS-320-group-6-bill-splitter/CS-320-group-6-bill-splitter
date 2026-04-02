@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
-
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,6 +32,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'core',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -70,7 +70,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'bill_splitter.wsgi.application'
 
-AUTH_USER_MODEL = 'models.User'
+AUTH_USER_MODEL = 'core.User'
 
 
 # Database
@@ -80,10 +80,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'postgres',
-        'USER': 'postgres',
+        'USER': 'postgres.widrxjinfjrbezhfuzoo',
         'PASSWORD': os.environ['DATABASE_PASSWORD'],
-        'HOST': 'db.widrxjinfjrbezhfuzoo.supabase.co',
-        'PORT': '5432',
+        'HOST': 'aws-1-us-east-1.pooler.supabase.com',
+        'PORT': '6543',
     }
 }
 
@@ -112,7 +112,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/New_York'
 
 USE_I18N = True
 
