@@ -11,7 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from .serializers import HouseholdSerializer
 
-# endpoints
+# endpoint
+
 
 # if not logged in, serve the login page
 
