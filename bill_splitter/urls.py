@@ -27,7 +27,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
 
     path('households/', HouseholdListCreateView.as_view(), name='household-list-create'),
-    path('households/<int:pk>/', HouseholdDetailView.as_view(), name='household-detail'),
-    path('households/<int:pk>/leave/', HouseholdLeaveView.as_view(), name='household-leave'),
-    path('households/<int:pk>/summary/', HouseholdSummaryView.as_view(), name='household-summary'),
+    path('households/<int:pk>/', views.HouseholdDetailView.as_view(), name='household-detail'),
+    path('households/<int:pk>/leave/', views.HouseholdLeaveView.as_view(), name='household-leave'),
+    path('households/<int:pk>/summary/', views.HouseholdSummaryView.as_view(), name='household-summary'),
 ]
