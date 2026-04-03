@@ -17,7 +17,6 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from core import views
-from core.views import HouseholdListCreateView #, HouseholdDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,5 +25,19 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 
-    path('households/', HouseholdListCreateView.as_view(), name='household-list-create'),
+    path(
+        'households/',
+        views.HouseholdListCreateView.as_view(),
+        name='household-list-create',
+    ),
+    path(
+        'bills/list/<int:household_id>/',
+        views.BillListView.as_view(),
+        name='bill-list',
+    ),
+    path(
+        'bills/create/<int:household_id>/',
+        views.BillCreateView.as_view(),
+        name='bill-create',
+    ),
 ]
