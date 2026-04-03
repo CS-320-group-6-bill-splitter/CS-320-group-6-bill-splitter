@@ -1,22 +1,24 @@
-from django.contrib.auth import login, logout, authenticate
+import json
+
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-import json
-from .models import User, Household
-from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from .serializers import HouseholdSerializer
+from django.views.decorators.http import require_POST
 
-# endpoints
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-# if not logged in, serve the login page
+from .models import Bill, Debt, Household, Payment, User 
+from .serializers import BillListSerializer, HouseholdSerializer, UserSerializer
+
 
 @require_POST
 def register(request):
+    """Register a new user with the provided email, display name, and
+    password."""
     data = json.loads(request.body)
     email = data.get('email')
     display_name = data.get('display_name')
@@ -30,8 +32,10 @@ def register(request):
     return JsonResponse({'message': 'User created successfully',
                          'display_name': user.display_name}, status=201)
 
+
 @require_POST
 def login_view(request):
+    """Authenticate and log in a user with the provided email and password."""
     data = json.loads(request.body)
     email = data.get('email')
     password = data.get('password')
@@ -43,21 +47,18 @@ def login_view(request):
     login(request, user)
     return JsonResponse({'message': 'Login successful', 'display_name': user.display_name, 'profile_picture': user.profile_picture,})
 
+
 @login_required
 @require_POST
 def logout_view(request):
+    """Log out the currently authenticated user."""
     logout(request)
     return JsonResponse({'message': 'Logged out successfully'})
 
-# update user: display name, add/change profile image
-
-# if logged in, serve the home page (list of households)
-
-# dashboard for specific household
-    # list of amounts owed by users
-    # list of bills for household
 
 class HouseholdListCreateView(APIView):
+    """View for listing and creating households."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -74,17 +75,62 @@ class HouseholdListCreateView(APIView):
                 household_name=serializer.validated_data['name'],
                 created_by=request.user
             )
-            return Response(HouseholdSerializer(household).data, status=status.HTTP_201_CREATED)
+
+            return Response(
+                HouseholdSerializer(household).data,
+                status=status.HTTP_201_CREATED,
+            )
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# add user to household
 
-# create bill form
+class BillListView(APIView):
+    """View for listing bills in a household."""
 
-# view bill details
+    permission_classes = [IsAuthenticated]
 
-# view amount details for specific user
+    def get(self, request, household_id):
+        """List all bills a user is owed for in a household."""
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response(
+                {'error': 'You are not a member of this household'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-# user settings
+        bills = request.user.bills_owed.filter(household=household)
+        serializer = BillListSerializer(bills, many=True)
 
-# make payment form
+        return Response(serializer.data)
+
+
+class BillCreateView(APIView):
+    """View for creating a new bill in a household."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, household_id):
+        """Create a new bill in a household."""
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response(
+                {'error': 'You are not a member of this household'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = BillListSerializer(data=request.data)
+        if serializer.is_valid():
+            bill = Bill.objects.create_bill(
+                name=serializer.validated_data['name'],
+                household=household,
+                amount=serializer.validated_data['amount'],
+                user_owed=request.user,
+                debts=serializer.validated_data['debts'],
+            )
+
+            return Response(
+                BillListSerializer(bill).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
