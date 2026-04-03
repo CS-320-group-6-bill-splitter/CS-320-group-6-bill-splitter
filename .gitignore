@@ -5,3 +5,6 @@ __pycache__/
 # Django
 *.log
 db.sqlite3
+
+# Environment
+secrets.sh
