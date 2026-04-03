@@ -17,7 +17,6 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from core import views
-from core.views import HouseholdListCreateView, HouseholdDetailView, HouseholdLeaveView, HouseholdSummaryView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -30,4 +29,19 @@ urlpatterns = [
     path('households/<int:pk>/', views.HouseholdDetailView.as_view(), name='household-detail'),
     path('households/<int:pk>/leave/', views.HouseholdLeaveView.as_view(), name='household-leave'),
     path('households/<int:pk>/summary/', views.HouseholdSummaryView.as_view(), name='household-summary'),
+    path(
+        'households/',
+        views.HouseholdListCreateView.as_view(),
+        name='household-list-create',
+    ),
+    path(
+        'bills/list/<int:household_id>/',
+        views.BillListView.as_view(),
+        name='bill-list',
+    ),
+    path(
+        'bills/create/<int:household_id>/',
+        views.BillCreateView.as_view(),
+        name='bill-create',
+    ),
 ]
