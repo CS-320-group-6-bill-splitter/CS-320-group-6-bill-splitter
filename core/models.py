@@ -4,43 +4,6 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from bill_splitter import settings
 
 
-# Create your models here.
-class HouseholdManager(models.Manager):
-    """helper methods for managing household instances go here"""
-
-    def create_household(self, household_name, created_by):
-        household = self.create(name=household_name)
-        household.members.add(created_by) # add creator as a member
-        return household
-
-class Household(models.Model):
-    """name: name for the household.
-    members: set of users who belong to the household"""
-    objects = HouseholdManager()
-
-    name = models.CharField(max_length=200)
-    members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name='households',
-        blank=True)
-
-    def __str__(self):
-        return self.name
-
-    def add_member(self, user):
-        self.members.add(user)
-
-    def remove_member(self, user):
-        self.members.remove(user)
-
-    def get_members(self):
-        return self.members.all()
-
-    def get_summary(self):
-        # to be added once bill/debts models are complete
-        return self.members.all()
-
-
 class UserManager(BaseUserManager):
     """Custom user manager to handle user creation and superuser creation."""
 
@@ -85,7 +48,7 @@ class User(AbstractBaseUser):
     objects = UserManager()
 
     def __str__(self):
-        return self.display_name
+        return f"[USER] {self.display_name} ({self.email})"
 
     def get_full_name(self):
         """Return the display name as the full name of the user."""
@@ -96,21 +59,61 @@ class User(AbstractBaseUser):
         return self.display_name
 
 
+class HouseholdManager(models.Manager):
+    """helper methods for managing household instances go here"""
+
+    def create_household(self, household_name, created_by):
+        household = self.create(name=household_name)
+        household.members.add(created_by) # add creator as a member
+        return household
+
+
+class Household(models.Model):
+    """name: name for the household.
+    members: set of users who belong to the household"""
+
+    name = models.CharField(max_length=200)
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='households',
+        blank=True,
+    )
+
+    objects = HouseholdManager()
+
+    def __str__(self):
+        return f"[HOUSEHOLD] {self.name}"
+
+    def add_member(self, user):
+        self.members.add(user)
+
+    def remove_member(self, user):
+        self.members.remove(user)
+
+    def get_members(self):
+        return self.members.all()
+
+    def get_summary(self):
+        # to be added once bill/debts models are complete
+        return self.members.all()
+
+
 class BillManager(models.Manager):
     """Custom manager for the Bill model to handle bill creation."""
 
-    def create_bill(self, name, household, date_created, user_owed, debts):
-        """Create and save a bill with the given name, date created, user owed,
+    def create_bill(self, name, household, amount, user_owed, debts):
+        """Create and save a bill with the given name, user owed,
         and debts."""
         bill = self.model(
             name=name,
             household=household,
-            date_created=date_created,
-            user_owed=user_owed
+            amount=amount,
+            user_owed=user_owed,
         )
+
         for user_id, amount in debts.items():
             user = User.objects.get(pk=user_id)
-            debt = DebtManager().create_debt(amount, user, bill)
+            debt = Debt.objects.create_debt(amount, user, bill)
             bill.debts.add(debt)
         bill.save(using=self._db)
         return bill
@@ -121,7 +124,12 @@ class Bill(models.Model):
     owed, and associated debts."""
 
     name = models.CharField(max_length=255)
-    household = models.ForeignKey('Household', on_delete=models.CASCADE)
+    household = models.ForeignKey(
+        'Household',
+        related_name='bills',
+        on_delete=models.CASCADE,
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
     date_created = models.DateTimeField(auto_now_add=True)
     user_owed = models.ForeignKey(User, on_delete=models.CASCADE)
     resolved = models.BooleanField(default=False)
@@ -129,14 +137,11 @@ class Bill(models.Model):
     objects = BillManager()
 
     def __str__(self):
-        return f"{self.name} owed to {self.user_owed.display_name}"
-
-    def get_total_amount(self):
-        """Calculate and return the total amount owed for this bill."""
-        total = 0
-        for debt in self.debts.all():
-            total += debt.amount
-        return total
+        return (
+            f"[BILL] {self.name} - {self.amount} "
+            f"for {self.household.name} "
+            f"owed to {self.user_owed.display_name}"
+        )
     
     def update(self, name=None, user_owed=None, debts=None):
         """Update this bill's resolved flag."""
@@ -165,16 +170,25 @@ class Debt(models.Model):
 
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     user_owing = models.ForeignKey(User, on_delete=models.CASCADE)
-    bill = models.ForeignKey(Bill, related_name='debts', on_delete=models.CASCADE)
+    bill = models.ForeignKey(
+        Bill,
+        related_name='debts',
+        on_delete=models.CASCADE,
+    )
     is_resolved = models.BooleanField(default=False)
 
     objects = DebtManager()
 
     def __str__(self):
-        return f"{self.user_owing.display_name} owes {self.amount} for {self.bill.name}"
+        return (
+            f"[DEBT] {self.user_owing.display_name} "
+            f"owes {self.amount} "
+            f"to {self.bill.user_owed.display_name} "
+            f"for {self.bill.name}"
+        )
 
     def update(self, payment_amount):
-        """Update this debt's resolved flag based on the payment_amount amount."""
+        """Update this debt's resolved flag based on payment_amount."""
         if payment_amount >= self.amount:
             self.is_resolved = True
         self.save()
@@ -204,9 +218,18 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     user_paying = models.ForeignKey(User, on_delete=models.CASCADE)
     date = models.DateTimeField(auto_now_add=True)
-    debt = models.ForeignKey(Debt, related_name='payments', on_delete=models.CASCADE)
+    debt = models.ForeignKey(
+        Debt,
+        related_name='payments',
+        on_delete=models.CASCADE,
+    )
 
     objects = PaymentManager()
 
     def __str__(self):
-        return f"{self.user_paying.display_name} paid {self.amount} for {self.debt.bill.name}"
+        return (
+            f"[PAYMENT] {self.user_paying.display_name} "
+            f"paid {self.amount} "
+            f"to {self.debt.bill.user_owed.display_name} "
+            f"for {self.debt.bill.name}"
+        )
