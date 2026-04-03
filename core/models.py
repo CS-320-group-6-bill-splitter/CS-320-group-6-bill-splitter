@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
-from bill_splitter import settings
+from bill_splitter.settings import AUTH_USER_MODEL
 
-
+      
 class UserManager(BaseUserManager):
     """Custom user manager to handle user creation and superuser creation."""
 
@@ -57,8 +57,8 @@ class User(AbstractBaseUser):
     def get_short_name(self):
         """Return the display name as the short name of the user."""
         return self.display_name
-
-
+      
+      
 class HouseholdManager(models.Manager):
     """helper methods for managing household instances go here"""
 
@@ -67,35 +67,58 @@ class HouseholdManager(models.Manager):
         household.members.add(created_by) # add creator as a member
         return household
 
-
+      
 class Household(models.Model):
     """name: name for the household.
     members: set of users who belong to the household"""
+    objects = HouseholdManager()
 
     name = models.CharField(max_length=200)
     members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
+        AUTH_USER_MODEL,
         related_name='households',
-        blank=True,
-    )
-
-    objects = HouseholdManager()
+        blank=True)
 
     def __str__(self):
-        return f"[HOUSEHOLD] {self.name}"
+        return self.name
 
     def add_member(self, user):
         self.members.add(user)
 
     def remove_member(self, user):
         self.members.remove(user)
+        if self.members.count()==0:
+            self.delete()
 
     def get_members(self):
         return self.members.all()
 
-    def get_summary(self):
-        # to be added once bill/debts models are complete
-        return self.members.all()
+    def get_summary(self, current_user):
+        """Return a dict keyed by user id for each household member other than
+        current_user. Each value contains the member's display_name, how much
+        they owe current_user, and how much current_user owes them"""
+        summary = {}
+        for member in self.members.exclude(pk=current_user.pk):
+            they_owe_me = Debt.objects.filter(
+                bill__household=self,
+                bill__user_owed=current_user,
+                user_owing=member,
+                is_resolved=False
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+            i_owe_them = Debt.objects.filter(
+                bill__household=self,
+                bill__user_owed=member,
+                user_owing=current_user,
+                is_resolved=False
+            ).aggregate(total=models.Sum('amount'))['total'] or 0
+
+            summary[member.pk] = {
+                'display_name': member.display_name,
+                'they_owe_me': they_owe_me,
+                'i_owe_them': i_owe_them,
+            }
+        return summary
 
 
 class BillManager(models.Manager):

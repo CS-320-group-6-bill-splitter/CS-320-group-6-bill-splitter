@@ -14,6 +14,8 @@ class HouseholdSerializer(serializers.ModelSerializer):
     """Serializer for the Household model."""
 
     members = serializers.StringRelatedField(many=True, read_only=True)
+    #total bills active for user
+    #total amount user owes for household
     member_count = serializers.IntegerField(
         source='members.count',
         read_only=True,
