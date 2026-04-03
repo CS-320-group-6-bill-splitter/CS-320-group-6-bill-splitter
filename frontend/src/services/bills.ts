@@ -1,6 +1,7 @@
 import { apiFetch } from "./api";
 import { Bill } from "@/types";
 
+//Placeholder functions and paths until backend finishes
 export const billsService = {
   getAll: () => apiFetch<Bill[]>("/bills/"),
   getById: (id: string) => apiFetch<Bill>(`/bills/${id}/`),

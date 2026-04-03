@@ -20,7 +20,7 @@ export default function GroupPage({
   const { id } = use(params);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="flex flex-1 flex-col gap-6 p-6 pt-20">
       {/* Members section */}
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Members</h2>
