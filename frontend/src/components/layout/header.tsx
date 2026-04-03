@@ -27,7 +27,7 @@ export function Header() {
       <div className="flex items-center gap-3">
         <Link href="/">
           <Image
-            src="/splitseas_logo.png"
+            src="/Splitseas_LOGO.svg"
             alt="SplitSeas"
             width={120}
             height={40}
