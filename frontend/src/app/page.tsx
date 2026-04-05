@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { groupsService } from "@/services/groups";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { SeaWaves } from "@/components/sea-waves";
@@ -9,21 +10,15 @@ import { WetSandOverlay } from "@/components/wet-sand-overlay";
 import { CreateGroupModal } from "@/components/modals/create-group-modal";
 import { GroupCard } from "@/components/group-card";
 import { Plus, ChevronDown } from "lucide-react";
-import { Group } from "@/types";
-
-const MOCK_GROUPS: Group[] = [
-  {
-    id: "1",
-    name: "Example Group",
-    created_by: "1",
-    members: [
-      { id: "1", email: "john@example.com", name: "John Doe" },
-      { id: "2", email: "alex@example.com", name: "Alex S" },
-      { id: "3", email: "mary@example.com", name: "Mary K" },
-    ],
-    created_at: "2026-03-30T00:00:00Z",
-  },
-];
+import { Household, Bill } from "@/types";
+import { billsService } from "@/services/bills";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 
 function easeInOutSine(t: number) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
@@ -199,34 +194,114 @@ function LoggedOutView() {
 }
 
 function LoggedInView() {
+  const { refreshGroups } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
+  const [groups, setGroups] = useState<Household[]>([]);
+  const [recentBills, setRecentBills] = useState<(Bill & { householdName: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchGroups = useCallback(() => {
+    setLoading(true);
+    groupsService.getAll()
+      .then((g) => {
+        setGroups(g);
+        // Fetch bills from all households and merge
+        Promise.all(
+          g.map((group) =>
+            billsService.getByHousehold(group.id)
+              .then((bills) => bills.map((b) => ({ ...b, householdName: group.name })))
+              .catch(() => [] as (Bill & { householdName: string })[])
+          )
+        ).then((allBills) => {
+          const merged = allBills
+            .flat()
+            .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime())
+            .slice(0, 3);
+          setRecentBills(merged);
+        });
+      })
+      .catch(() => setGroups([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
+
+  function handleCreateClose(open: boolean) {
+    setCreateOpen(open);
+    if (!open) {
+      fetchGroups();
+      refreshGroups();
+    }
+  }
+
+  function handleLeave() {
+    fetchGroups();
+    refreshGroups();
+  }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6 pt-20">
-      <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold">Your Groups</h1>
-        <Button variant="ghost" size="icon" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-5 w-5" />
-        </Button>
-      </div>
-      <CreateGroupModal open={createOpen} onOpenChange={setCreateOpen} />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MOCK_GROUPS.map((group) => (
-          <GroupCard
-            key={group.id}
-            group={group}
-            totalAmount={120}
-            billCount={5}
-            balanceText="You owe $15.00"
-          />
-        ))}
+    <div className="flex h-screen flex-col gap-6 p-6 pt-20 overflow-hidden">
+      <CreateGroupModal open={createOpen} onOpenChange={handleCreateClose} />
+      <div className="flex flex-1 gap-6 min-h-0">
+        {/* Groups section — left side */}
+        <section className="flex flex-1 flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Your Groups</h1>
+            <Button variant="ghost" size="icon" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-5 w-5" />
+            </Button>
+          </div>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading groups...</p>
+          ) : groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No groups yet. Create one to get started!</p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto pr-1">
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  onLeave={handleLeave}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Recent Bills section — right side */}
+        <section className="flex w-80 shrink-0 flex-col gap-4">
+          <h2 className="text-2xl font-bold">Recent Bills</h2>
+          {recentBills.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent bills.</p>
+          ) : (
+            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+              {recentBills.map((bill) => (
+                <Card key={bill.id}>
+                  <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-base">{bill.name}</CardTitle>
+                    <CardDescription className="text-xs">
+                      {bill.householdName} · {new Date(bill.date_created).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <p className="text-xl font-bold">${bill.amount}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
 }
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
 
   return user ? <LoggedInView /> : <LoggedOutView />;
 }

@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { groupsService } from "@/services/groups";
 import { usePathname, useParams } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,30 @@ import UserProfile from "@/components/modals/UserProfile";
 export function Header() {
   const pathname = usePathname();
   const params = useParams<{ id: string }>();
-  const { user, logout, openLogin, openRegister } = useAuth();
+  const { user, logout, openLogin, openRegister, groupsVersion } = useAuth();
 
   const isGroupPage = pathname.startsWith("/groups/") && params.id;
+  const [groupName, setGroupName] = useState("");
+
+  useEffect(() => {
+    if (!isGroupPage || !user) return;
+    groupsService.getById(Number(params.id))
+      .then((g) => setGroupName(g.name))
+      .catch(() => setGroupName(""));
+  }, [isGroupPage, params.id, user]);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [householdNames, setHouseholdNames] = useState<string[]>([]);
+
+  const fetchHouseholds = useCallback(() => {
+    if (!user) return;
+    groupsService.getAll()
+      .then((groups) => setHouseholdNames(groups.map((g) => g.name)))
+      .catch(() => setHouseholdNames([]));
+  }, [user, groupsVersion]);
+
+  useEffect(() => {
+    fetchHouseholds();
+  }, [fetchHouseholds]);
   const [overOcean, setOverOcean] = useState(!user);
 
   useEffect(() => {
@@ -61,7 +82,7 @@ export function Header() {
       {/* Center section — group name when on a group page */}
       {isGroupPage && (
         <h1 className="absolute left-1/2 -translate-x-1/2 text-lg font-semibold">
-          Group
+          {groupName || "Group"}
         </h1>
       )}
       <div className="flex-1" />
@@ -72,9 +93,9 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <Avatar className="h-9 w-9 cursor-pointer">
-                <AvatarImage src={user.avatar_url} alt={user.name} />
+                <AvatarImage src={user.profile_picture ?? undefined} alt={user.display_name} />
                 <AvatarFallback>
-                  {user.name
+                  {user.display_name
                     .split(" ")
                     .map((n) => n[0])
                     .join("")
@@ -108,8 +129,8 @@ export function Header() {
     {user && (
       <UserProfile
         user={{
-          name: user.name,
-          households: ["Example Group"],
+          name: user.display_name,
+          households: householdNames,
         }}
         open={profileOpen}
         onOpenChange={setProfileOpen}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Group } from "@/types";
+import { Household } from "@/types";
 import {
   Card,
   CardHeader,
@@ -9,7 +9,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,20 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, UserPlus, LogOut } from "lucide-react";
 import { groupsService } from "@/services/groups";
-
 interface GroupCardProps {
-  group: Group;
+  group: Household;
   totalAmount?: number;
   billCount?: number;
   balanceText?: string;
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  onLeave?: () => void;
 }
 
 export function GroupCard({
@@ -39,6 +31,7 @@ export function GroupCard({
   totalAmount = 0,
   billCount = 0,
   balanceText,
+  onLeave,
 }: GroupCardProps) {
   return (
     <Card className="relative cursor-pointer hover:bg-muted/50 transition-colors">
@@ -57,7 +50,7 @@ export function GroupCard({
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
-              onClick={() => groupsService.leaveGroup(group.id)}
+              onClick={() => groupsService.leave(group.id).then(() => onLeave?.())}
             >
               <LogOut className="mr-2 h-4 w-4" />
               Leave group
@@ -69,19 +62,16 @@ export function GroupCard({
         <CardHeader>
           <CardTitle>{group.name}</CardTitle>
           <CardDescription>
-            Total: ${totalAmount.toFixed(2)} · {billCount} bill
-            {billCount !== 1 ? "s" : ""}
+            {group.member_count} member{group.member_count !== 1 ? "s" : ""}
+            {billCount > 0 && ` · ${billCount} bill${billCount !== 1 ? "s" : ""}`}
+            {totalAmount > 0 && ` · $${totalAmount.toFixed(2)}`}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {group.members.length > 0 && (
             <div className="flex items-center gap-1">
-              {group.members.map((member) => (
-                <Avatar key={member.id} className="h-7 w-7">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(member.name)}
-                  </AvatarFallback>
-                </Avatar>
+              {group.members.map((member, i) => (
+                <AvatarWithTooltip key={i} name={member} className="h-7 w-7 text-xs" />
               ))}
             </div>
           )}

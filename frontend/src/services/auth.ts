@@ -1,24 +1,32 @@
 import { apiFetch } from "./api";
-import { User } from "@/types";
 
-interface AuthResponse {
-  user: User;
-  token: string;
+interface LoginResponse {
+  message: string;
+  display_name: string;
+  profile_picture: string | null;
+}
+
+interface RegisterResponse {
+  message: string;
+  display_name: string;
 }
 
 export const authService = {
   login: (email: string, password: string) =>
-    apiFetch<AuthResponse>("/auth/login/", {
+    apiFetch<LoginResponse>("/login/", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (email: string, password: string, name: string) =>
-    apiFetch<AuthResponse>("/auth/register/", {
+  register: (email: string, password: string, display_name: string) =>
+    apiFetch<RegisterResponse>("/register/", {
       method: "POST",
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, display_name }),
     }),
 
   logout: () =>
-    apiFetch("/auth/logout/", { method: "POST" }),
+    apiFetch<{ message: string }>("/logout/", { method: "POST" }),
+
+  me: () =>
+    apiFetch<{ id: number; email: string; display_name: string; profile_picture: string | null }>("/me/"),
 };
