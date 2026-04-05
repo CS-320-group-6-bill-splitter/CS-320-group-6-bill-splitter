@@ -1,14 +1,22 @@
 import { apiFetch } from "./api";
-import { Group } from "@/types";
+import { Household, HouseholdSummary } from "@/types";
 
 export const groupsService = {
-  getAll: () => apiFetch<Group[]>("/groups/"),
-  getById: (id: string) => apiFetch<Group>(`/groups/${id}/`),
-  create: (data: Partial<Group>) =>
-    apiFetch<Group>("/groups/", {
+  getAll: () => apiFetch<Household[]>("/households/"),
+
+  create: (data: { name: string }) =>
+    apiFetch<Household>("/households/", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  delete: (id: string) =>
-    apiFetch(`/groups/${id}/`, { method: "DELETE" }),
+
+  getById: (id: number) => apiFetch<Household>(`/households/${id}/`),
+
+  getSummary: (id: number) =>
+    apiFetch<HouseholdSummary>(`/households/${id}/summary/`),
+
+  leave: (id: number) =>
+    apiFetch<void>(`/households/${id}/leave/`, {
+      method: "POST",
+    }),
 };

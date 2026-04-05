@@ -1,28 +1,37 @@
 // Core types for the bill splitter app
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
-  name: string;
-  avatar_url?: string;
+  display_name: string;
+  profile_picture?: string | null;
 }
 
-export interface Group {
-  id: string;
+export interface Household {
+  id: number;
   name: string;
-  created_by: string;
-  members: User[];
-  created_at: string;
+  members: string[];
+  member_count: number;
+}
+
+export interface HouseholdSummary {
+  [memberId: string]: {
+    display_name: string;
+    they_owe_me: number;
+    i_owe_them: number;
+  };
 }
 
 export interface Bill {
-  id: string;
-  title: string;
-  total_amount: number;
-  group_id: string;
-  created_by: string;
-  splits: Split[];
-  created_at: string;
+  id: number;
+  name: string;
+  amount: string;
+  date_created: string;
+  users_owing: {
+    id: number;
+    display_name: string;
+    email: string;
+  }[];
 }
 
 export interface Split {
@@ -32,3 +41,6 @@ export interface Split {
   amount: number;
   is_paid: boolean;
 }
+
+// Keep Group as alias for backwards compat in components
+export type Group = Household;
