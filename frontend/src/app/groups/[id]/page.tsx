@@ -1,7 +1,8 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { Button } from "@/components/ui/button";
+import CreateBill from "@/components/modals/CreateBill";
 import {
   Card,
   CardHeader,
@@ -18,6 +19,7 @@ export default function GroupPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const [billOpen, setBillOpen] = useState(false);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6 pt-20">
@@ -38,7 +40,7 @@ export default function GroupPage({
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Bills</h2>
-          <Button>Add Bill</Button>
+          <Button onClick={() => setBillOpen(true)}>Add Bill</Button>
         </div>
         <div className="grid gap-4">
           {/* Bill cards will be mapped here from API data */}
@@ -69,6 +71,12 @@ export default function GroupPage({
           </div>
         </div>
       </section>
+
+      <CreateBill
+        members={[{ name: "John Doe" }, { name: "Alex S" }, { name: "Mary K" }]}
+        open={billOpen}
+        onOpenChange={setBillOpen}
+      />
     </div>
   );
 }
