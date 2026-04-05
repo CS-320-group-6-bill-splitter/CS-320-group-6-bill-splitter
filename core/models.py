@@ -133,12 +133,13 @@ class BillManager(models.Manager):
             amount=amount,
             user_owed=user_owed,
         )
+        bill.save(using=self._db)
 
         for user_id, amount in debts.items():
             user = User.objects.get(pk=user_id)
             debt = Debt.objects.create_debt(amount, user, bill)
             bill.debts.add(debt)
-        bill.save(using=self._db)
+        
         return bill
 
 
@@ -220,13 +221,12 @@ class Debt(models.Model):
 class PaymentManager(models.Manager):
     """Custom manager for the Payment model to handle payment creation."""
 
-    def create_payment(self, amount, user_paying, date, debt):
+    def create_payment(self, amount, user_paying, debt):
         """Create and save a payment with the given amount, user paying, and
         associated debt."""
         payment = self.model(
             amount=amount,
             user_paying=user_paying,
-            date=date,
             debt=debt
         )
         payment.save(using=self._db)
