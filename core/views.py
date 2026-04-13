@@ -2,6 +2,7 @@ import json
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -161,8 +162,8 @@ class BillListView(APIView):
                 {'error': 'You are not a member of this household'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        bills = Bill.objects.filter(household=household)
+        bills = Bill.objects.filter((Q(user_owed=request.user) | Q(debts__user_owing=request.user)), household=household).distinct()
+        
         serializer = BillListSerializer(bills, many=True)
 
         return Response(serializer.data)
