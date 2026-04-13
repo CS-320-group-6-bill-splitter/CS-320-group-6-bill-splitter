@@ -81,6 +81,8 @@ class Household(models.Model):
         related_name='households',
         blank=True)
 
+    # pending members?
+
     def __str__(self):
         return self.name
 
@@ -155,10 +157,16 @@ class HouseholdInvitation(models.Model):
         related_name='invitations',
         on_delete=models.CASCADE,
     )
+
+    #user making the invitation? or just let anyone in household see "pending" members. I think second thing
+
+    # invited
     email = models.EmailField()
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(
         max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    # not created with household. invitations happen later. on households page you can
+    #       see household's you've been invited to and then you can accept/decline from there
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = HouseholdInvitationManager()
