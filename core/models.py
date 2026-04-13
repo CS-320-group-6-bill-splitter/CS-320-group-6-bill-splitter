@@ -96,6 +96,7 @@ class Household(models.Model):
 
     def get_members(self):
         return self.members.all()
+        # pending members?
 
     def get_summary(self, current_user):
         """Return a dict keyed by user id for each household member other than
