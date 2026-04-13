@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
@@ -119,6 +121,67 @@ class Household(models.Model):
                 'i_owe_them': i_owe_them,
             }
         return summary
+
+
+class HouseholdInvitationManager(models.Manager):
+    """Manager for HouseholdInvitation"""
+
+    def create_invitation(self, household, email):
+        """Create and save a pending invitation with a given email and
+        household"""
+        invitation = self.model(
+            household=household,
+            email=email.lower(),
+        )
+        invitation.save(using=self._db)
+        return invitation
+
+
+class HouseholdInvitation(models.Model):
+    """Model of an invitation to join a household. Invitations are
+    email-based and not tied to a specific user, when a user logs in with a
+    matching email, they can accept or decline. A UUID token is stored for use
+    in future email invite links"""
+
+    PENDING = 'pending'
+    ACCEPTED = 'accepted'
+    STATUS_CHOICES = [
+        (PENDING, 'Pending'),
+        (ACCEPTED, 'Accepted'),
+    ]
+
+    household = models.ForeignKey(
+        Household,
+        related_name='invitations',
+        on_delete=models.CASCADE,
+    )
+    email = models.EmailField()
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = HouseholdInvitationManager()
+
+    class Meta:
+        unique_together = ('household', 'email')
+
+    def __str__(self):
+        return (
+            f"[INVITATION] {self.email} invited to "
+            f"{self.household.name} ({self.status})"
+        )
+
+    def accept(self, user):
+        """Add the user to the household and mark this invitation as
+        accepted."""
+        self.household.add_member(user)
+        self.status = self.ACCEPTED
+        self.save()
+
+    def decline(self):
+        """Delete this invitation."""
+        self.delete()
 
 
 class BillManager(models.Manager):
