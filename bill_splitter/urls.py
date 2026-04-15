@@ -24,15 +24,48 @@ urlpatterns = [
     path('register/', views.register, name='register'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('me/', views.me_view, name='me'),
 
-    path('households/', views.HouseholdListCreateView.as_view(), name='household-list-create'),
-    path('households/<int:pk>/', views.HouseholdDetailView.as_view(), name='household-detail'),
-    path('households/<int:pk>/leave/', views.HouseholdLeaveView.as_view(), name='household-leave'),
-    path('households/<int:pk>/summary/', views.HouseholdSummaryView.as_view(), name='household-summary'),
-    path('households/<int:pk>/invite/', views.HouseholdInviteView.as_view(), name='household-invite'),
+    path(
+        'households/',
+        views.HouseholdListCreateView.as_view(),
+        name='household-list-create',
+    ),
+    path(
+        'households/<int:pk>/',
+        views.HouseholdDetailView.as_view(),
+        name='household-detail',
+    ),
+    path(
+        'households/<int:pk>/leave/',
+        views.HouseholdLeaveView.as_view(),
+        name='household-leave',
+    ),
+    path(
+        'households/<int:pk>/summary/',
+        views.HouseholdSummaryView.as_view(),
+        name='household-summary',
+    ),
+    path(
+        'households/<int:pk>/invite/',
+        views.HouseholdInviteView.as_view(),
+        name='household-invite',
+    ),
 
-    path('invitations/<uuid:token>/respond/', views.InvitationRespondView.as_view(), name='invitation-respond'),
+    path(
+        'invitations/<uuid:token>/respond/',
+        views.InvitationRespondView.as_view(),
+        name='invitation-respond',
+    ),
 
-    path('bills/list/<int:household_id>/', views.BillListView.as_view(), name='bill-list'),
-    path('bills/create/<int:household_id>/', views.BillCreateView.as_view(), name='bill-create'),
+    path(
+        'bills/list/<int:household_id>/',
+        views.BillListView.as_view(),
+        name='bill-list',
+    ),
+    path(
+        'bills/create/<int:household_id>/',
+        views.BillCreateView.as_view(),
+        name='bill-create',
+    ),
 ]

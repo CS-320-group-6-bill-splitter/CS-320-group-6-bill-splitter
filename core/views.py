@@ -4,6 +4,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from rest_framework import status
@@ -15,6 +16,7 @@ from .models import Bill, Debt, Household, HouseholdInvitation, Payment, User
 from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer
 
 
+@csrf_exempt
 @require_POST
 def register(request):
     """Register a new user with the provided email, display name, and
@@ -33,6 +35,7 @@ def register(request):
                          'display_name': user.display_name}, status=201)
 
 
+@csrf_exempt
 @require_POST
 def login_view(request):
     """Authenticate and log in a user with the provided email and password."""
@@ -48,12 +51,25 @@ def login_view(request):
     return JsonResponse({'message': 'Login successful', 'display_name': user.display_name, 'profile_picture': user.profile_picture,})
 
 
+@csrf_exempt
 @login_required
 @require_POST
 def logout_view(request):
     """Log out the currently authenticated user."""
     logout(request)
     return JsonResponse({'message': 'Logged out successfully'})
+
+
+def me_view(request):
+    """Return the currently authenticated user, or 401."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+    return JsonResponse({
+        'id': request.user.id,
+        'email': request.user.email,
+        'display_name': request.user.display_name,
+        'profile_picture': request.user.profile_picture,
+    })
 
 
 class HouseholdListCreateView(APIView):
@@ -219,7 +235,7 @@ class BillListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        bills = request.user.bills_owed.filter(household=household)
+        bills = Bill.objects.filter(household=household)
         serializer = BillListSerializer(bills, many=True)
 
         return Response(serializer.data)
