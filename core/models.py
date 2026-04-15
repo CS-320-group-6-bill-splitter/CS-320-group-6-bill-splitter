@@ -158,10 +158,6 @@ class HouseholdInvitation(models.Model):
         related_name='invitations',
         on_delete=models.CASCADE,
     )
-
-    #user making the invitation? or just let anyone in household see "pending" members. I think second thing
-
-    # invited
     email = models.EmailField()
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(

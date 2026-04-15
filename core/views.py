@@ -11,8 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Bill, Debt, Household, Payment, User 
-from .serializers import BillListSerializer, HouseholdSerializer, UserSerializer
+from .models import Bill, Debt, Household, HouseholdInvitation, Payment, User
+from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer
 
 
 @require_POST
@@ -62,10 +62,16 @@ class HouseholdListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """List all existing households"""
+        """List all households the user is a member of, plus pending invitations."""
         households = request.user.households.all()
-        serializer = HouseholdSerializer(households, many=True)
-        return Response(serializer.data)
+        pending_invitations = HouseholdInvitation.objects.filter(
+            email=request.user.email,
+            status=HouseholdInvitation.PENDING,
+        )
+        return Response({
+            'memberships': HouseholdSerializer(households, many=True).data,
+            'invitations': HouseholdInvitationSerializer(pending_invitations, many=True).data,
+        })
 
     def post(self, request):
         """Create a new household"""
@@ -130,7 +136,74 @@ class HouseholdLeaveView(APIView):
         household.remove_member(request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-# add user to household
+class HouseholdInviteView(APIView):
+    """
+    POST /households/<id>/invite/  → invite a user by email to the household.
+                                     Only existing members may send invitations.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        household = get_object_or_404(Household, pk=pk, members=request.user)
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if household.members.filter(email=email).exists():
+            return Response(
+                {'error': 'A user with this email is already a member of this household'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if HouseholdInvitation.objects.filter(
+            household=household,
+            email=email,
+            status=HouseholdInvitation.PENDING,
+        ).exists():
+            return Response(
+                {'error': 'A pending invitation has already been sent to this email'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invitation = HouseholdInvitation.objects.create_invitation(
+            household=household,
+            email=email,
+        )
+        return Response(
+            HouseholdInvitationSerializer(invitation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class InvitationRespondView(APIView):
+    """
+    POST /invitations/<token>/respond/  → accept or decline a pending invitation.
+                                          The authenticated user's email must match
+                                          the invitation email.
+    Body: {"action": "accept" | "decline"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, token):
+        invitation = get_object_or_404(
+            HouseholdInvitation,
+            token=token,
+            email=request.user.email,
+            status=HouseholdInvitation.PENDING,
+        )
+        action = request.data.get('action')
+        if action == 'accept':
+            invitation.accept(request.user)
+            return Response({'message': 'Invitation accepted'})
+        elif action == 'decline':
+            invitation.decline()
+            return Response({'message': 'Invitation declined'})
+        else:
+            return Response(
+                {'error': 'Invalid action. Use "accept" or "decline".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
 
 class BillListView(APIView):
     """View for listing bills in a household."""

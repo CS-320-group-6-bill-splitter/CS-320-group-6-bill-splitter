@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-&!$l(z0j=^&nxwadfploeya*dtp%8kpmf$vjgfd@v(f6!sws^f
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -71,6 +71,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'bill_splitter.wsgi.application'
 
 AUTH_USER_MODEL = 'core.User'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Database
