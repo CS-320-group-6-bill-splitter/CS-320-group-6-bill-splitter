@@ -26,7 +26,7 @@ class HouseholdInvitationSerializer(serializers.ModelSerializer):
 class HouseholdSerializer(serializers.ModelSerializer):
     """Serializer for the Household model."""
 
-    members = serializers.StringRelatedField(many=True, read_only=True)
+    members = serializers.SerializerMethodField()
     member_count = serializers.IntegerField(
         source='members.count',
         read_only=True,
@@ -36,6 +36,13 @@ class HouseholdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Household
         fields = ['id', 'name', 'members', 'member_count', 'pending_invitations']
+
+    def get_members(self, household):
+        """Return id and display_name for each household member."""
+        return [
+            {'id': user.id, 'display_name': user.display_name}
+            for user in household.members.all()
+        ]
 
     def get_pending_invitations(self, household):
         """Return emails of users with pending invitations to this household."""
