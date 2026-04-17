@@ -223,7 +223,11 @@ class Bill(models.Model):
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date_created = models.DateTimeField(auto_now_add=True)
-    user_owed = models.ForeignKey(User, on_delete=models.CASCADE)
+    user_owed = models.ForeignKey(
+        User,
+        related_name='bills',
+        on_delete=models.CASCADE,
+    )
     resolved = models.BooleanField(default=False)
 
     objects = BillManager()
@@ -261,7 +265,11 @@ class Debt(models.Model):
     associated bill."""
 
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    user_owing = models.ForeignKey(User, on_delete=models.CASCADE)
+    user_owing = models.ForeignKey(
+        User,
+        related_name='debts',
+        on_delete=models.CASCADE,
+    )
     bill = models.ForeignKey(
         Bill,
         related_name='debts',
@@ -307,7 +315,11 @@ class Payment(models.Model):
     and associated debt."""
 
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    user_paying = models.ForeignKey(User, on_delete=models.CASCADE)
+    user_paying = models.ForeignKey(
+        User,
+        related_name='payments',
+        on_delete=models.CASCADE,
+    )
     date = models.DateTimeField(auto_now_add=True)
     debt = models.ForeignKey(
         Debt,

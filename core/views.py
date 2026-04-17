@@ -3,6 +3,7 @@ import json
 from django.contrib.auth import authenticate, login, logout
 from django.core.mail import send_mail
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -14,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Bill, Debt, Household, HouseholdInvitation, Payment, User
-from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer
+from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer, PaymentSerializer, BillDetailSerializer
 
 
 @csrf_exempt
@@ -105,6 +106,7 @@ class HouseholdListCreateView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class HouseholdDetailView(APIView):
     """
@@ -248,8 +250,8 @@ class BillListView(APIView):
                 {'error': 'You are not a member of this household'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        bills = Bill.objects.filter(household=household)
+        bills = Bill.objects.filter((Q(user_owed=request.user) | Q(debts__user_owing=request.user)), household=household).distinct()
+        
         serializer = BillListSerializer(bills, many=True)
 
         return Response(serializer.data)
@@ -285,3 +287,100 @@ class BillCreateView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BillDetailView(APIView):
+    """
+    GET    /households/<household_id>/bills/<bill_id>/  → retrieve a bill
+    PATCH  /households/<household_id>/bills/<bill_id>/  → update a bill's name, amount, or debts
+    DELETE /households/<household_id>/bills/<bill_id>/  → delete a bill
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, household_id, bill_id):
+        """Retrieve a bill."""
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response(
+                {'error': 'You are not a member of this household'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bill = get_object_or_404(Bill, id=bill_id, household=household)
+        serializer = BillDetailSerializer(bill)
+
+        return Response(serializer.data)
+
+    def patch(self, request, household_id, bill_id):
+        """Update a bill's name."""
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response(
+                {'error': 'You are not a member of this household'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bill = get_object_or_404(Bill, id=bill_id, household=household)
+        serializer = BillListSerializer(bill, data={ 'name': request.data.get('name') }, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, household_id, bill_id):
+        """Delete a bill."""
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response(
+                {'error': 'You are not a member of this household'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bill = get_object_or_404(Bill, id=bill_id, household=household)
+
+        if bill.user_owed != request.user:
+            return Response(
+                {'error': 'Only the user owed can delete this bill'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bill.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PaymentListByBillView(APIView):
+    """View for listing payments for a specific bill."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bill_id):
+        """List all payments for the specified bill."""
+        bill = get_object_or_404(Bill, id=bill_id)
+        if request.user != bill.user_owed:
+            return Response(
+                {'error': 'Only the user owed can view payments for this bill'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        payments = Payment.objects.filter(debt__bill=bill)
+        serializer = PaymentSerializer(payments, many=True)
+        return Response(serializer.data)
+    
+
+class PaymentListByDebtView(APIView):
+    """View for listing payments for a specific debt."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, debt_id):
+        """List all payments for the specified debt."""
+        debt = get_object_or_404(Debt, id=debt_id)
+        if request.user != debt.user_owing:
+            return Response(
+                {'error': 'Only the user owing can view payments for this debt'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        payments = Payment.objects.filter(debt=debt)
+        serializer = PaymentSerializer(payments, many=True)
+        return Response(serializer.data)

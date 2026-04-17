@@ -68,4 +68,15 @@ urlpatterns = [
         views.BillCreateView.as_view(),
         name='bill-create',
     ),
+
+    path(
+        'payments/list-bill/<int:bill_id>/',
+        views.PaymentListByBillView.as_view(),
+        name='payment-list-by-bill',
+    ),
+    path(
+        'payments/list-debt/<int:debt_id>/',
+        views.PaymentListByDebtView.as_view(),
+        name='payment-list-by-debt',
+    )
 ]
