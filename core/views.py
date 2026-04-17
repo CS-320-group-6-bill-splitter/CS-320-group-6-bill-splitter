@@ -198,3 +198,17 @@ class BillCreateView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DebtViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = DebtSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        household_id = self.kwargs.get("household_id")
+        user = self.request.user
+
+        return Debt.objects.filter(
+            household_id=household_id,
+            debtor=user
+        )
+        
