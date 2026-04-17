@@ -42,5 +42,34 @@ export interface Split {
   is_paid: boolean;
 }
 
+export interface DebtPayment {
+  id: number;
+  amount: string;
+  user_paying: User;
+  date: string;
+  method: string;
+}
+
+export interface Debt {
+  id: number;
+  amount: string;
+  user_owing: User;
+  bill: {
+    id: number;
+    name: string;
+    user_owed: User;
+    date_created: string;
+  };
+  is_resolved: boolean;
+  payments: DebtPayment[];
+}
+
+export interface Invite {
+  id: number;
+  email: string;
+  household: Household;
+  status: "pending" | "accepted" | "declined";
+}
+
 // Keep Group as alias for backwards compat in components
 export type Group = Household;

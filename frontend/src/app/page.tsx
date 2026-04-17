@@ -9,8 +9,9 @@ import { ShorelineWaves } from "@/components/shoreline-waves";
 import { WetSandOverlay } from "@/components/wet-sand-overlay";
 import { CreateGroupModal } from "@/components/modals/create-group-modal";
 import { GroupCard } from "@/components/group-card";
+import { GhostGroupCard } from "@/components/ghost-group-card";
 import { Plus, ChevronDown } from "lucide-react";
-import { Household, Bill } from "@/types";
+import { Household, Bill, Invite } from "@/types";
 import { billsService } from "@/services/bills";
 import {
   Card,
@@ -200,6 +201,23 @@ function LoggedInView() {
   const [recentBills, setRecentBills] = useState<(Bill & { householdName: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Dummy incoming invites (replace with invitesService.getIncoming() once backend is ready)
+  const incomingInvites: Invite[] = [
+    {
+      id: 1,
+      email: "you@example.com",
+      household: { id: 999, name: "Beach House Trip", members: ["[USER] Sarah (sarah@example.com)", "[USER] Mike (mike@example.com)"], member_count: 2 },
+      status: "pending",
+    },
+  ];
+
+  // Dummy outgoing pending invite emails per group (replace with invitesService.getOutgoing() once backend is ready)
+  // Uses the first loaded group's ID to attach demo pending invites
+  const firstGroupId = groups[0]?.id;
+  const pendingInvitesByGroup: Record<number, string[]> = firstGroupId
+    ? { [firstGroupId]: ["pending@example.com", "invited@example.com"] }
+    : {};
+
   const fetchGroups = useCallback(() => {
     setLoading(true);
     groupsService.getAll()
@@ -263,9 +281,30 @@ function LoggedInView() {
                 <GroupCard
                   key={group.id}
                   group={group}
+                  pendingInvites={pendingInvitesByGroup[group.id] ?? []}
                   onLeave={handleLeave}
+                  onInvite={(email) => {
+                    // TODO: call invitesService.send(group.id, email) once backend is ready
+                    console.log(`Invite ${email} to group ${group.id}`);
+                  }}
                 />
               ))}
+              {incomingInvites
+                .filter((inv) => inv.status === "pending")
+                .map((invite) => (
+                  <GhostGroupCard
+                    key={`invite-${invite.id}`}
+                    invite={invite}
+                    onAccept={() => {
+                      // TODO: call invitesService.accept(invite.id) once backend is ready
+                      console.log(`Accept invite ${invite.id}`);
+                    }}
+                    onDecline={() => {
+                      // TODO: call invitesService.decline(invite.id) once backend is ready
+                      console.log(`Decline invite ${invite.id}`);
+                    }}
+                  />
+                ))}
             </div>
           )}
         </section>
