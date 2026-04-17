@@ -34,19 +34,30 @@ urlpatterns = [
     path(
         'households/<int:pk>/',
         views.HouseholdDetailView.as_view(),
-        name='household-detail'
+        name='household-detail',
     ),
     path(
         'households/<int:pk>/leave/',
         views.HouseholdLeaveView.as_view(),
-        name='household-leave'
+        name='household-leave',
     ),
     path(
         'households/<int:pk>/summary/',
         views.HouseholdSummaryView.as_view(),
-        name='household-summary'
+        name='household-summary',
     ),
-    
+    path(
+        'households/<int:pk>/invite/',
+        views.HouseholdInviteView.as_view(),
+        name='household-invite',
+    ),
+
+    path(
+        'invitations/<uuid:token>/respond/',
+        views.InvitationRespondView.as_view(),
+        name='invitation-respond',
+    ),
+
     path(
         'bills/list/<int:household_id>/',
         views.BillListView.as_view(),
@@ -57,4 +68,15 @@ urlpatterns = [
         views.BillCreateView.as_view(),
         name='bill-create',
     ),
+
+    path(
+        'payments/list-bill/<int:bill_id>/',
+        views.PaymentListByBillView.as_view(),
+        name='payment-list-by-bill',
+    ),
+    path(
+        'payments/list-debt/<int:debt_id>/',
+        views.PaymentListByDebtView.as_view(),
+        name='payment-list-by-debt',
+    )
 ]
