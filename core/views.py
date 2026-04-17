@@ -1,6 +1,7 @@
 import json
 
 from django.contrib.auth import authenticate, login, logout
+from django.core.mail import send_mail
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -107,9 +108,8 @@ class HouseholdListCreateView(APIView):
 
 class HouseholdDetailView(APIView):
     """
-    GET    /households/<id>/      → retrieve a household
-    PATCH  /households/<id>/      → update a household's name
-    # DELETE removed — households are deleted automatically when all members leave
+    GET: retrieve a household
+    PATCH: update a household's name
     """
     permission_classes = [IsAuthenticated]
 
@@ -142,8 +142,8 @@ class HouseholdSummaryView(APIView):
 
 class HouseholdLeaveView(APIView):
     """
-    POST /households/<id>/leave/  → remove the requesting user from the household.
-                                    Deletes the household if they were the last member.
+    POST: remove the requesting user from the household.
+    Deletes the household if they were the last member.
     """
     permission_classes = [IsAuthenticated]
 
@@ -154,8 +154,7 @@ class HouseholdLeaveView(APIView):
 
 class HouseholdInviteView(APIView):
     """
-    POST /households/<id>/invite/  → invite a user by email to the household.
-                                     Only existing members may send invitations.
+    POST: invite a user by email to the household.
     """
     permission_classes = [IsAuthenticated]
 
@@ -185,6 +184,23 @@ class HouseholdInviteView(APIView):
             household=household,
             email=email,
         )
+
+        from django.conf import settings
+        accept_url = f"{getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:3000')}/invitations/{invitation.token}/respond"
+
+        send_mail(
+            subject=f"You've been invited to join {household.name} on SplitSeas!",
+            message=(
+                f"Hi!\n\n"
+                f"{request.user.display_name} has invited you to join "
+                f"\"{household.name}\" on SplitSeas.\n\n"
+                f"You can accept your invitation here:\n{accept_url}\n\n"
+            ),
+            from_email=None,
+            recipient_list=[email],
+            fail_silently=True,
+        )
+
         return Response(
             HouseholdInvitationSerializer(invitation).data,
             status=status.HTTP_201_CREATED,
@@ -193,10 +209,8 @@ class HouseholdInviteView(APIView):
 
 class InvitationRespondView(APIView):
     """
-    POST /invitations/<token>/respond/  → accept or decline a pending invitation.
-                                          The authenticated user's email must match
-                                          the invitation email.
-    Body: {"action": "accept" | "decline"}
+    POST: accept or decline a pending invitation.
+    The authenticated user's email must match the invitation email.
     """
     permission_classes = [IsAuthenticated]
 
