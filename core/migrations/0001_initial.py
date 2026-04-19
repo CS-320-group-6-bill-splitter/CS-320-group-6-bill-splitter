@@ -32,6 +32,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=255)),
+                ('amount', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('date_created', models.DateTimeField(auto_now_add=True)),
                 ('resolved', models.BooleanField(default=False)),
                 ('user_owed', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
@@ -58,7 +59,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='bill',
             name='household',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.household'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bills', to='core.household'),
         ),
         migrations.CreateModel(
             name='Payment',
