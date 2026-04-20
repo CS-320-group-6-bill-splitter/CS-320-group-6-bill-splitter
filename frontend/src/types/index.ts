@@ -10,7 +10,7 @@ export interface User {
 export interface Household {
   id: number;
   name: string;
-  members: string[];
+  members: { id: number; display_name: string }[];;
   member_count: number;
 }
 

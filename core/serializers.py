@@ -75,7 +75,7 @@ class BillListSerializer(serializers.ModelSerializer):
 class BillDetailSerializer(serializers.ModelSerializer):
     """Serializer for the Bill model. For use in returning details of a bill."""
     
-    debts = serializers.SerializerMethodField()
+    #debts = serializers.SerializerMethodField()
 
     class Meta:
         model = Bill

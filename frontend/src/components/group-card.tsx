@@ -71,7 +71,7 @@ export function GroupCard({
           {group.members.length > 0 && (
             <div className="flex items-center gap-1">
               {group.members.map((member, i) => (
-                <AvatarWithTooltip key={i} name={member} className="h-7 w-7 text-xs" />
+            <AvatarWithTooltip key={i} name={member.display_name} className="h-7 w-7 text-xs" />
               ))}
             </div>
           )}

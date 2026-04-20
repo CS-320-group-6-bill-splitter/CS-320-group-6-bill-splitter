@@ -96,6 +96,30 @@ export default function GroupPage({
       },
     }));
   }
+  async function handleCreateBillSaved(bill: {
+    expenseName: string;
+    amount: number;
+    paidBy: string;
+    splits: { name: string; amount: number; percent: number }[];
+  }) {
+    const debts: Record<number, number> = {};
+    for (const split of bill.splits) {
+      if (split.name === bill.paidBy) continue;
+      const member = group.members.find((m) => m.display_name === split.name);
+      if (member) debts[member.id] = split.amount;
+    }
+    try {
+      await billsService.create(groupId, {
+        name: bill.expenseName,
+        amount: bill.amount,
+        debts,
+      });
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Could not create bill");
+    }
+  }
 
   if (loading) {
     return (
@@ -121,8 +145,8 @@ export default function GroupPage({
           Members ({group.member_count})
         </h2>
         <div className="flex gap-2">
-          {group.members.map((member, i) => (
-            <AvatarWithTooltip key={i} name={member} />
+        {group.members.map((member, i) => (
+        <AvatarWithTooltip key={i} name={member.display_name} />
           ))}
         </div>
       </section>
@@ -238,10 +262,11 @@ export default function GroupPage({
         />
       )}
 
-      <CreateBill
-        members={group.members.map((m) => ({ name: parseMemberName(m) }))}
+        <CreateBill
+        members={group.members.map((m) => ({ name: m.display_name }))}
         open={billOpen}
         onOpenChange={handleBillClose}
+        onSave={handleCreateBillSaved}
       />
     </div>
   );

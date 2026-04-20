@@ -271,7 +271,7 @@ class BillCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = BillListSerializer(data=request.data)
+        serializer = BillDetailSerializer(data=request.data)
         if serializer.is_valid():
             bill = Bill.objects.create_bill(
                 name=serializer.validated_data['name'],
@@ -282,7 +282,7 @@ class BillCreateView(APIView):
             )
 
             return Response(
-                BillListSerializer(bill).data,
+                BillDetailSerializer(bill).data,
                 status=status.HTTP_201_CREATED,
             )
 
