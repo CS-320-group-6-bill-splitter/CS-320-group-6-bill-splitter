@@ -16,6 +16,7 @@ import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
 import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
 import { billsService } from "@/services/bills";
+import { debtsService } from "@/services/debts";
 import { Household, Bill, Debt, HouseholdSummary } from "@/types";
 import { parseMemberName } from "@/lib/utils";
 
@@ -32,54 +33,10 @@ export default function GroupPage({
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [group, setGroup] = useState<Household | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
-  const mockBills: Bill[] = [
-    {
-      id: -1,
-      name: "Mock Dinner Bill",
-      amount: "100.00",
-      date_created: new Date().toISOString(),
-      users_owing: [
-        { id: 101, display_name: "artichoke", email: "a@example.com" },
-        { id: 102, display_name: "bart", email: "b@example.com" },
-        { id: 103, display_name: "chad", email: "c@example.com" },
-      ],
-    },
-  ];
   const [summary, setSummary] = useState<HouseholdSummary>({});
   const [loading, setLoading] = useState(true);
 
-  // Dummy debt data (replace with debtsService.getByHousehold(groupId) once backend is ready)
-  const debts: Debt[] = [
-    {
-      id: 1,
-      amount: "24.50",
-      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
-      bill: { id: 101, name: "Groceries", user_owed: { id: 11, email: "alice@example.com", display_name: "Alice" }, date_created: "2026-04-10T00:00:00Z" },
-      is_resolved: false,
-      payments: [
-        { id: 1, amount: "5.00", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-11T00:00:00Z", method: "Venmo" },
-        { id: 2, amount: "7.50", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-13T00:00:00Z", method: "Cash" },
-      ],
-    },
-    {
-      id: 2,
-      amount: "45.00",
-      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
-      bill: { id: 102, name: "Electric Bill", user_owed: { id: 12, email: "bob@example.com", display_name: "Bob" }, date_created: "2026-04-08T00:00:00Z" },
-      is_resolved: false,
-      payments: [
-        { id: 3, amount: "20.00", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-09T00:00:00Z", method: "Zelle" },
-      ],
-    },
-    {
-      id: 3,
-      amount: "15.75",
-      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
-      bill: { id: 103, name: "Internet", user_owed: { id: 13, email: "charlie@example.com", display_name: "Charlie" }, date_created: "2026-04-05T00:00:00Z" },
-      is_resolved: false,
-      payments: [],
-    },
-  ];
+  const [debts, setDebts] = useState<Debt[]>([]);
 
   const pendingInvites = (group?.pending_invitations ?? []).map((inv) => inv.email);
 
@@ -92,6 +49,9 @@ export default function GroupPage({
     billsService.getByHousehold(groupId)
       .then(setBills)
       .catch(() => setBills([]));
+    debtsService.getByHousehold(groupId)
+      .then(setDebts)
+      .catch(() => setDebts([]));
   }, [groupId]);
 
   useEffect(() => {
@@ -103,33 +63,69 @@ export default function GroupPage({
     if (!open) fetchData();
   }
 
-  const visibleBills = bills.length > 0 ? bills : mockBills;
-  const selectedVisibleBill = visibleBills.find((b) => b.id === selectedBillId) ?? null;
+  const selectedVisibleBill = bills.find((b) => b.id === selectedBillId) ?? null;
 
   function buildDebtorsForBill(bill: Bill): Debtor[] {
-    const total = Number(bill.amount) || 0;
-    const users = bill.users_owing ?? [];
-    if (users.length === 0) return [];
+    const debts = bill.debts ?? [];
+    if (debts.length === 0) return [];
 
-    const equalShare = total / users.length;
-    const paidMap = mockPaidByBill[bill.id] ?? {};
+    const overrideMap = mockPaidByBill[bill.id] ?? {};
 
-    return users.map((u) => ({
-      id: u.id,
-      name: u.display_name,
-      totalOwed: equalShare,
-      paidAmount: paidMap[u.id] ?? 0,
+    return debts.map((d) => ({
+      id: d.user.id,
+      debtId: d.id,
+      name: d.user.display_name,
+      totalOwed: parseFloat(d.amount),
+      paidAmount: overrideMap[d.user.id] ?? parseFloat(d.paid_amount),
     }));
   }
 
-  function handleChangePaid(billId: number, debtorId: number, nextPaid: number) {
+  async function handleChangePaid(billId: number, debtor: Debtor, nextPaid: number) {
+    // Optimistic UI update
     setMockPaidByBill((prev) => ({
       ...prev,
       [billId]: {
         ...(prev[billId] ?? {}),
-        [debtorId]: nextPaid,
+        [debtor.id]: nextPaid,
       },
     }));
+
+    // Mock bill (no real backend record) — local only
+    if (debtor.debtId < 0) return;
+
+    const delta = nextPaid - debtor.paidAmount;
+    if (delta === 0) return;
+    if (delta < 0) {
+      // Recording a negative payment isn't supported by the backend yet.
+      console.warn("Reducing paid amount is not supported");
+      return;
+    }
+
+    try {
+      await debtsService.createPayment(groupId, debtor.debtId, { amount: delta });
+      await fetchData();
+      // Clear the optimistic override now that real data is fresh
+      setMockPaidByBill((prev) => {
+        const next = { ...prev };
+        if (next[billId]) {
+          const { [debtor.id]: _omit, ...rest } = next[billId];
+          next[billId] = rest;
+        }
+        return next;
+      });
+    } catch (e) {
+      console.error("Failed to record payment:", e);
+      // Roll back optimistic update
+      setMockPaidByBill((prev) => {
+        const next = { ...prev };
+        if (next[billId]) {
+          const { [debtor.id]: _omit, ...rest } = next[billId];
+          next[billId] = rest;
+        }
+        return next;
+      });
+      alert(e instanceof Error ? e.message : "Could not record payment");
+    }
   }
   async function handleCreateBillSaved(bill: {
     expenseName: string;
@@ -193,44 +189,18 @@ export default function GroupPage({
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Bills section */}
         <section className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between px-6">
             <h2 className="text-lg font-semibold">Your Bills</h2>
             <Button size="sm" onClick={() => setBillOpen(true)}>Add Bill</Button>
           </div>
           {bills.length === 0 ? (
             <p className="text-sm text-muted-foreground">No bills yet.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
               {bills.map((bill) => (
                 <Card
                   key={bill.id}
-                  className="cursor-pointer transition hover:shadow-md border border-black"
-                  onClick={() => setSelectedBillId(bill.id)}
-                >
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-base">{bill.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {new Date(bill.date_created).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 flex flex-col gap-1">
-                    <p className="text-xl font-bold">${bill.amount}</p>
-                    {bill.users_owing.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Owed by: {bill.users_owing.map((u) => u.display_name).join(", ")}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-          {bills.length === 0 && (
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
-              {mockBills.map((bill) => (
-                <Card
-                  key={bill.id}
-                  className="cursor-pointer transition hover:shadow-md"
+                  className="cursor-pointer"
                   onClick={() => setSelectedBillId(bill.id)}
                 >
                   <CardHeader className="p-4 pb-2">
@@ -255,31 +225,34 @@ export default function GroupPage({
 
         {/* Your Debts section */}
         <section className="flex flex-1 flex-col gap-3">
-          <h2 className="text-lg font-semibold">Your Debts</h2>
+          <h2 className="text-lg font-semibold px-6">Your Debts</h2>
           {debts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No debts yet.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
-              {debts.map((debt) => (
-                <Card
-                  key={debt.id}
-                  className="cursor-pointer transition-shadow hover:shadow-md"
-                  onClick={() => setSelectedDebt(debt)}
-                >
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-base">{debt.bill.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {new Date(debt.bill.date_created).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 flex flex-col gap-1">
-                    <p className="text-xl font-bold">${parseFloat(debt.amount).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Owed to: {debt.bill.user_owed.display_name}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
+              {debts.map((debt) => {
+                const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
+                return (
+                  <Card
+                    key={debt.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedDebt(debt)}
+                  >
+                    <CardHeader className="p-4 pb-2">
+                      <CardTitle className="text-base">{debt.bill_name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {debt.is_resolved ? "Paid" : "Outstanding"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 flex flex-col gap-1">
+                      <p className="text-xl font-bold">${remaining.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        of ${parseFloat(debt.amount).toFixed(2)} · Owed to {debt.user_owed.display_name}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </section>
@@ -291,8 +264,8 @@ export default function GroupPage({
           totalAmount={Number(selectedVisibleBill.amount) || 0}
           debtors={buildDebtorsForBill(selectedVisibleBill)}
           onClose={() => setSelectedBillId(null)}
-          onChangePaid={(debtorId, nextPaid) =>
-            handleChangePaid(selectedVisibleBill.id, debtorId, nextPaid)
+          onChangePaid={(debtor, nextPaid) =>
+            handleChangePaid(selectedVisibleBill.id, debtor, nextPaid)
           }
         />
       )}
@@ -306,6 +279,7 @@ export default function GroupPage({
 
       <DebtDetail
         debt={selectedDebt}
+        householdId={groupId}
         open={selectedDebt !== null}
         onOpenChange={(open: boolean) => { if (!open) setSelectedDebt(null); }}
         onPaymentSubmitted={fetchData}

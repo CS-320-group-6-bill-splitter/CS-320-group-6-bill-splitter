@@ -11,7 +11,8 @@ const COLORS = {
 };
 
 export type Debtor = {
-  id: number;
+  id: number; // user id
+  debtId: number; // backend Debt.id, used when recording payments
   name: string;
   totalOwed: number;
   paidAmount: number;
@@ -22,7 +23,7 @@ type BillDetailViewProps = {
   totalAmount: number;
   debtors: Debtor[];
   onClose: () => void;
-  onChangePaid: (debtorId: number, nextPaid: number) => void;
+  onChangePaid: (debtor: Debtor, nextPaid: number) => void;
 };
 
 function personIcon(color: string) {
@@ -46,12 +47,17 @@ const BillDetailView: FC<BillDetailViewProps> = ({
 }) => {
   const [paymentInputs, setPaymentInputs] = useState<Record<number, string>>({});
 
-  function handleApplyPaid(debtorId: number, totalOwed: number, fallbackPaid: number) {
-    const raw = paymentInputs[debtorId];
-    const parsed = raw === undefined || raw === "" ? fallbackPaid : Number(raw);
+  function handleApplyPaid(debtor: Debtor) {
+    const raw = paymentInputs[debtor.id];
+    const parsed = raw === undefined || raw === "" ? debtor.paidAmount : Number(raw);
     if (Number.isNaN(parsed)) return;
-    onChangePaid(debtorId, clamp(parsed, 0, totalOwed));
+    onChangePaid(debtor, clamp(parsed, 0, debtor.totalOwed));
   }
+
+  // Sum of what debtors owe — used as the bar denominator. The bill's
+  // `totalAmount` may include the creator's own share, which has no debt and
+  // would leave the bar visually short.
+  const debtorsTotal = debtors.reduce((sum, d) => sum + d.totalOwed, 0) || 1;
 
   return (
     <>
@@ -96,8 +102,8 @@ const BillDetailView: FC<BillDetailViewProps> = ({
                 const segmentColor = GREENS[i % GREENS.length];
                 const prevFractions = debtors
                   .slice(0, i)
-                  .reduce((sum, curr) => sum + curr.totalOwed / (totalAmount || 1), 0);
-                const center = prevFractions + (d.totalOwed / (totalAmount || 1)) / 2;
+                  .reduce((sum, curr) => sum + curr.totalOwed / debtorsTotal, 0);
+                const center = prevFractions + (d.totalOwed / debtorsTotal) / 2;
                 return (
                   <div
                     key={d.id}
@@ -124,7 +130,7 @@ const BillDetailView: FC<BillDetailViewProps> = ({
                 <div
                   key={d.id}
                   style={{
-                    width: `${(d.totalOwed / (totalAmount || 1)) * 100}%`,
+                    width: `${(d.totalOwed / debtorsTotal) * 100}%`,
                     background: GREENS[i % GREENS.length],
                     height: "100%",
                   }}
@@ -139,7 +145,7 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             <div style={{ ...barContainerStyle, background: COLORS.inputBg, border: `2px solid ${COLORS.inputBg}` }}>
               {debtors.map((d, i) => {
                 const segmentColor = GREENS[i % GREENS.length];
-                const segmentWidth = (d.totalOwed / (totalAmount || 1)) * 100;
+                const segmentWidth = (d.totalOwed / debtorsTotal) * 100;
                 const progressPct = d.totalOwed === 0 ? 0 : clamp((d.paidAmount / d.totalOwed) * 100, 0, 100);
 
                 return (
@@ -171,8 +177,8 @@ const BillDetailView: FC<BillDetailViewProps> = ({
               {debtors.map((d, i) => {
                 const prevFractions = debtors
                   .slice(0, i)
-                  .reduce((sum, curr) => sum + curr.totalOwed / (totalAmount || 1), 0);
-                const center = prevFractions + (d.totalOwed / (totalAmount || 1)) / 2;
+                  .reduce((sum, curr) => sum + curr.totalOwed / debtorsTotal, 0);
+                const center = prevFractions + (d.totalOwed / debtorsTotal) / 2;
                 const progressPct = d.totalOwed === 0 ? 0 : clamp((d.paidAmount / d.totalOwed) * 100, 0, 100);
                 return (
                   <div
@@ -234,7 +240,7 @@ const BillDetailView: FC<BillDetailViewProps> = ({
                     />
                     <button
                       style={smallBtn}
-                      onClick={() => handleApplyPaid(d.id, d.totalOwed, d.paidAmount)}
+                      onClick={() => handleApplyPaid(d)}
                     >
                       Apply
                     </button>

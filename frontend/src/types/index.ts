@@ -28,6 +28,18 @@ export interface HouseholdSummary {
   };
 }
 
+export interface BillDebt {
+  id: number;
+  amount: string;
+  paid_amount: string;
+  is_resolved: boolean;
+  user: {
+    id: number;
+    display_name: string;
+    email: string;
+  };
+}
+
 export interface Bill {
   id: number;
   name: string;
@@ -38,6 +50,7 @@ export interface Bill {
     display_name: string;
     email: string;
   }[];
+  debts: BillDebt[];
 }
 
 export interface Split {
@@ -48,26 +61,29 @@ export interface Split {
   is_paid: boolean;
 }
 
+// Matches backend PaymentSerializer
 export interface DebtPayment {
   id: number;
   amount: string;
-  user_paying: User;
-  date: string;
-  method: string;
+  date_created: string;
+  user_from: string;
+  user_to: string;
+  bill_name: string;
+  // method: TBD — backend Payment model doesn't store payment method yet
 }
 
+// Matches backend DebtSerializer
 export interface Debt {
   id: number;
   amount: string;
-  user_owing: User;
-  bill: {
-    id: number;
-    name: string;
-    user_owed: User;
-    date_created: string;
-  };
+  paid_amount: string;
   is_resolved: boolean;
-  payments: DebtPayment[];
+  user_owing: User;
+  user_owed: User;
+  bill: number; // FK id (backend returns the int, not a nested object)
+  bill_name: string;
+  // payments are fetched separately via debtsService.getPayments
+  payments?: DebtPayment[];
 }
 
 // Matches the backend HouseholdInvitationSerializer response

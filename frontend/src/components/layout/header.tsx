@@ -130,7 +130,7 @@ export function Header() {
       <UserProfile
         user={{
           name: user.display_name,
-          households: householdNames,
+          groups: householdNames,
         }}
         open={profileOpen}
         onOpenChange={setProfileOpen}

@@ -8,6 +8,7 @@ import { debtsService } from "@/services/debts";
 
 type DebtDetailProps = {
   debt: Debt | null;
+  householdId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPaymentSubmitted?: () => void;
@@ -15,12 +16,13 @@ type DebtDetailProps = {
 
 const PAYMENT_METHODS = ["Credit Card", "Debit Card", "Venmo", "Zelle", "PayPal", "Cash"];
 
-export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitted }: DebtDetailProps) {
+export default function DebtDetail({ debt, householdId, open, onOpenChange, onPaymentSubmitted }: DebtDetailProps) {
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [hoveredPayment, setHoveredPayment] = useState<DebtPayment | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [payments, setPayments] = useState<DebtPayment[]>([]);
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
@@ -28,10 +30,23 @@ export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitte
     setPaymentAmount(0);
     setInputValue("");
     setPaymentMethod(PAYMENT_METHODS[0]);
+    if (debt) {
+      // Prefer payments already attached to the debt (avoids extra round-trip);
+      // otherwise fetch them. Falls back to [] on error so the modal still renders.
+      if (debt.payments) {
+        setPayments(debt.payments);
+      } else {
+        debtsService.getPayments(debt.id)
+          .then(setPayments)
+          .catch(() => setPayments([]));
+      }
+    } else {
+      setPayments([]);
+    }
   }, [debt]);
 
   const debtAmount = parseFloat(debt?.amount ?? "0");
-  const totalPaid = debt?.payments.reduce((sum, p) => sum + parseFloat(p.amount), 0) ?? 0;
+  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
   const remaining = debtAmount - totalPaid;
 
   const clampPayment = useCallback(
@@ -46,10 +61,10 @@ export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitte
   const payFraction = paymentAmount / total;
   const unpaidFraction = 1 - paidFraction - payFraction;
 
-  const owedToName = debt.bill.user_owed.display_name;
+  const owedToName = debt.user_owed.display_name;
 
   // Build segments for each past payment
-  const paymentSegments = debt.payments.map((p) => ({
+  const paymentSegments = payments.map((p) => ({
     payment: p,
     fraction: parseFloat(p.amount) / total,
   }));
@@ -175,7 +190,7 @@ export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitte
               color: "#012B43",
             }}
           >
-            {debt.bill.name}
+            {debt.bill_name}
           </h2>
 
           {/* Owed to with avatar */}
@@ -394,9 +409,11 @@ export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitte
                   return;
                 }
                 try {
-                  await debtsService.createPayment(debt.id, {
+                  // Backend currently only accepts `amount`. The selected
+                  // `paymentMethod` is captured here for when the Payment
+                  // model adds a method field.
+                  await debtsService.createPayment(householdId, debt.id, {
                     amount: paymentAmount,
-                    method: paymentMethod,
                   });
                   onPaymentSubmitted?.();
                 } catch (err) {
@@ -449,9 +466,9 @@ export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitte
             boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
         >
-          <div>${parseFloat(hoveredPayment.amount).toFixed(2)} &mdash; {hoveredPayment.method}</div>
+          <div>${parseFloat(hoveredPayment.amount).toFixed(2)}</div>
           <div style={{ color: "#A0D2DB", fontSize: "11px", marginTop: "2px" }}>
-            {new Date(hoveredPayment.date).toLocaleDateString(undefined, {
+            {new Date(hoveredPayment.date_created).toLocaleDateString(undefined, {
               year: "numeric",
               month: "short",
               day: "numeric",

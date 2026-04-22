@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials, parseMemberName } from "@/lib/utils";
 
@@ -10,28 +12,37 @@ interface AvatarWithTooltipProps {
 
 export function AvatarWithTooltip({ name, className = "h-9 w-9" }: AvatarWithTooltipProps) {
   const displayName = parseMemberName(name);
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  const show = () => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top - 8 });
+  };
+  const hide = () => setPos(null);
 
   return (
-    <div className="group/avatar relative">
-      <Avatar className={className}>
-        <AvatarFallback>{getInitials(name)}</AvatarFallback>
-      </Avatar>
-      <div className="pointer-events-none fixed left-[var(--tooltip-x)] top-[var(--tooltip-y)] -translate-x-1/2 whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow ring-1 ring-foreground/10 opacity-0 group-hover/avatar:opacity-100 transition-opacity z-[9999]"
-        ref={(el) => {
-          if (!el) return;
-          const parent = el.parentElement;
-          if (!parent) return;
-          const update = () => {
-            const rect = parent.getBoundingClientRect();
-            el.style.setProperty("--tooltip-x", `${rect.left + rect.width / 2}px`);
-            el.style.setProperty("--tooltip-y", `${rect.top - 8}px`);
-          };
-          update();
-          parent.addEventListener("mouseenter", update);
-        }}
+    <>
+      <div
+        ref={ref}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        className="relative"
       >
-        {displayName}
+        <Avatar className={className}>
+          <AvatarFallback>{getInitials(name)}</AvatarFallback>
+        </Avatar>
       </div>
-    </div>
+      {pos && typeof document !== "undefined" && createPortal(
+        <div
+          className="pointer-events-none fixed -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow ring-1 ring-foreground/10 z-[9999]"
+          style={{ left: pos.x, top: pos.y }}
+        >
+          {displayName}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
