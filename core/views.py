@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Bill, Debt, Household, HouseholdInvitation, Payment, User
-from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer, PaymentSerializer, BillDetailSerializer
+from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer, PaymentSerializer, BillDetailSerializer, DebtSerializer
 
 
 @csrf_exempt
@@ -351,18 +351,112 @@ class BillDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
       
-class DebtViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = DebtSerializer
+class DebtListView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        household_id = self.kwargs.get("household_id")
-        user = self.request.user
+    def get(self, request, household_id):
+        household = get_object_or_404(Household, id=household_id)
 
-        return Debt.objects.filter(
-            household_id=household_id,
-            debtor=user
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=403)
+
+        debts = Debt.objects.filter(
+            bill__household=household,
+            user_owing=request.user
+        ).distinct()
+
+        status_filter = request.query_params.get("status")
+
+        if status_filter == "paid":
+            debts = debts.filter(is_resolved=True)
+
+        elif status_filter == "unpaid":
+            debts = debts.filter(is_resolved=False)
+
+        return Response(DebtSerializer(debts, many=True).data)
+
+class DebtDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, household_id, debt_id):
+        household = get_object_or_404(Household, id=household_id)
+
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=403)
+
+        debt = get_object_or_404(
+            Debt,
+            id=debt_id,
+            bill__household=household,
+            user_owing=request.user
         )
+
+        return Response(DebtSerializer(debt).data)
+
+class DebtPayView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, household_id, debt_id):
+        household = get_object_or_404(Household, id=household_id)
+
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=403)
+
+        debt = get_object_or_404(
+            Debt,
+            id=debt_id,
+            bill__household=household,
+            user_owing=request.user
+        )
+
+        try:
+            amount = float(request.data.get("amount"))
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid amount'}, status=400)
+
+        if amount <= 0:
+            return Response({'error': 'Amount must be positive'}, status=400)
+
+        if amount > debt.amount:
+            return Response({'error': 'Cannot pay more than debt amount'}, status=400)
+
+        payment = Payment.objects.create_payment(
+            amount=amount,
+            user_paying=request.user,
+            debt=debt
+        )
+
+        total_paid = sum(debt.payments.values_list("amount", flat=True))
+
+        if total_paid >= float(debt.amount):
+            debt.is_resolved = True
+            debt.save()
+
+        return Response(PaymentSerializer(payment).data, status=201)
+
+class DebtFilterView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, household_id):
+        household = get_object_or_404(Household, id=household_id)
+
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=403)
+
+        debts = Debt.objects.filter(
+            bill__household=household,
+            user_owing=request.user
+        ).distinct()
+
+        status_filter = request.query_params.get("status")
+
+        if status_filter == "paid":
+            debts = debts.filter(is_resloved=True)
+
+        elif status_filter == "unpaid":
+            debts = debts.filter(is_resolved=False)
+
+        return Response(DebtSerializer(debts, many=True).data)
       
 
 class PaymentListByBillView(APIView):
