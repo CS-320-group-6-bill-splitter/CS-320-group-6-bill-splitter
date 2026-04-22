@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Bill, Debt, Household, HouseholdInvitation, Payment, User
-from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer, PaymentSerializer, BillDetailSerializer
+from .serializers import BillListSerializer, HouseholdInvitationSerializer, HouseholdSerializer, UserSerializer, PaymentSerializer, BillDetailSerializer, DebtSerializer
 
 
 @csrf_exempt
