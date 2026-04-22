@@ -27,7 +27,7 @@ class HouseholdInvitationSerializer(serializers.ModelSerializer):
 class HouseholdSerializer(serializers.ModelSerializer):
     """Serializer for the Household model."""
 
-    members = serializers.SerializerMethodField()
+    members = UserSerializer(many=True, read_only=True)
     member_count = serializers.IntegerField(
         source='members.count',
         read_only=True,
@@ -38,17 +38,52 @@ class HouseholdSerializer(serializers.ModelSerializer):
         model = Household
         fields = ['id', 'name', 'members', 'member_count', 'pending_invitations']
 
-    def get_members(self, household):
-        """Return id and display_name for each household member."""
-        return [
-            {'id': user.id, 'display_name': user.display_name}
-            for user in household.members.all()
-        ]
-
     def get_pending_invitations(self, household):
         """Return emails of users with pending invitations to this household."""
         pending = household.invitations.filter(status=HouseholdInvitation.PENDING)
         return [{'email': inv.email, 'created_at': inv.created_at} for inv in pending]
+    
+
+class PaymentSerializer(serializers.ModelSerializer):
+    """Serializer for the Payment model."""
+
+    debt = serializers.PrimaryKeyRelatedField(read_only=True)
+    user_from = UserSerializer(source='user_paying', read_only=True)
+    user_to = UserSerializer(source='debt.bill.user_owed', read_only=True)
+    bill_name = serializers.CharField(source='debt.bill.name', read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = [
+            'id',
+            'amount',
+            'date',
+            'debt',
+            'user_from',
+            'user_to',
+            'bill_name',
+        ]
+
+
+class DebtSerializer(serializers.ModelSerializer):
+    """Serializer for the Debt model."""
+
+    user_owing = UserSerializer(read_only=True)
+    user_owed = UserSerializer(source='bill.user_owed', read_only=True)
+    bill_name = serializers.CharField(source='bill.name', read_only=True)
+    is_resolved = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Debt
+        fields = [
+            'id',
+            'amount',
+            'is_resolved',
+            'user_owing',
+            'user_owed',
+            'bill',
+            'bill_name',
+        ]
 
 
 class BillListSerializer(serializers.ModelSerializer):
@@ -75,7 +110,7 @@ class BillListSerializer(serializers.ModelSerializer):
 class BillDetailSerializer(serializers.ModelSerializer):
     """Serializer for the Bill model. For use in returning details of a bill."""
     
-    debts = serializers.SerializerMethodField()
+    debts = DebtSerializer(many=True, read_only=True)
 
     class Meta:
         model = Bill
@@ -85,60 +120,4 @@ class BillDetailSerializer(serializers.ModelSerializer):
             'amount',
             'date_created',
             'debts',
-        ]
-
-    def get_debts(self, bill):
-        """Return a list of debts for this bill."""
-        debts = bill.debts.all()
-        return DebtSerializer(debts, many=True).data
-    
-
-class PaymentSerializer(serializers.ModelSerializer):
-    """Serializer for the Payment model."""
-
-    class Meta:
-        model = Payment
-        fields = [
-            'id',
-            'amount',
-            'date_created',
-            'user_from',
-            'user_to',
-            'bill_name',
-        ]
-
-    def get_date_created(self, payment):
-        """Return the date the payment was created."""
-        return payment.date.isoformat()
-
-    def get_bill_name(self, payment):
-        """Return the name of the bill associated with this payment."""
-        return payment.bill.name
-    
-    def get_user_from(self, payment):
-        """Return the display name of the user making the payment."""
-        return payment.user_paying.display_name
-
-    def get_user_to(self, payment):
-        """Return the display name of the user receiving the payment."""
-        return payment.debt.bill.user_owed.display_name
-
-class DebtSerializer(serializers.ModelSerializer):
-    """Serializer for the Debt model."""
-
-    user_owing = UserSerializer(read_only=True)
-    user_owed = UserSerializer(source='bill.user_owed', read_only=True)
-    bill_name = serializers.CharField(source='bill.name', read_only=True)
-    is_resolved = serializers.BooleanField(read_only=True)
-
-    class Meta:
-        model = Debt
-        fields = [
-            'id',
-            'amount',
-            'is_resolved',
-            'user_owing',
-            'user_owed',
-            'bill',
-            'bill_name',
         ]
