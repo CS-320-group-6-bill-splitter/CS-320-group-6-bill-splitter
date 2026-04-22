@@ -3,6 +3,10 @@
 import os
 import sys
 
+#allow .env use for DATABASE_PASSWORD
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def main():
     """Run administrative tasks."""
