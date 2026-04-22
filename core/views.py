@@ -153,6 +153,7 @@ class HouseholdLeaveView(APIView):
         household = get_object_or_404(Household, pk=pk, members=request.user)
         household.remove_member(request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+      
 
 class HouseholdInviteView(APIView):
     """
@@ -349,6 +350,20 @@ class BillDetailView(APIView):
         bill.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+      
+class DebtViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = DebtSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        household_id = self.kwargs.get("household_id")
+        user = self.request.user
+
+        return Debt.objects.filter(
+            household_id=household_id,
+            debtor=user
+        )
+      
 
 class PaymentListByBillView(APIView):
     """View for listing payments for a specific bill."""
