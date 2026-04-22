@@ -12,9 +12,10 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
+import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
 import { billsService } from "@/services/bills";
-import { Household, HouseholdSummary, Bill } from "@/types";
+import { Household, Bill, Debt } from "@/types";
 import { parseMemberName } from "@/lib/utils";
 
 export default function GroupPage({
@@ -27,6 +28,7 @@ export default function GroupPage({
   const { id } = use(params);
   const groupId = Number(id);
   const [billOpen, setBillOpen] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [group, setGroup] = useState<Household | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
   const mockBills: Bill[] = [
@@ -45,6 +47,42 @@ export default function GroupPage({
   const [summary, setSummary] = useState<HouseholdSummary>({});
   const [loading, setLoading] = useState(true);
 
+  // Dummy debt data (replace with debtsService.getByHousehold(groupId) once backend is ready)
+  const debts: Debt[] = [
+    {
+      id: 1,
+      amount: "24.50",
+      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
+      bill: { id: 101, name: "Groceries", user_owed: { id: 11, email: "alice@example.com", display_name: "Alice" }, date_created: "2026-04-10T00:00:00Z" },
+      is_resolved: false,
+      payments: [
+        { id: 1, amount: "5.00", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-11T00:00:00Z", method: "Venmo" },
+        { id: 2, amount: "7.50", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-13T00:00:00Z", method: "Cash" },
+      ],
+    },
+    {
+      id: 2,
+      amount: "45.00",
+      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
+      bill: { id: 102, name: "Electric Bill", user_owed: { id: 12, email: "bob@example.com", display_name: "Bob" }, date_created: "2026-04-08T00:00:00Z" },
+      is_resolved: false,
+      payments: [
+        { id: 3, amount: "20.00", user_paying: { id: 10, email: "you@example.com", display_name: "You" }, date: "2026-04-09T00:00:00Z", method: "Zelle" },
+      ],
+    },
+    {
+      id: 3,
+      amount: "15.75",
+      user_owing: { id: 10, email: "you@example.com", display_name: "You" },
+      bill: { id: 103, name: "Internet", user_owed: { id: 13, email: "charlie@example.com", display_name: "Charlie" }, date_created: "2026-04-05T00:00:00Z" },
+      is_resolved: false,
+      payments: [],
+    },
+  ];
+
+  // Dummy pending invites for this group (replace with invitesService.getOutgoing(groupId) once backend is ready)
+  const pendingInvites = ["pending@example.com", "invited@example.com"];
+
   const fetchData = useCallback(() => {
     setLoading(true);
     groupsService.getById(groupId)
@@ -54,9 +92,6 @@ export default function GroupPage({
     billsService.getByHousehold(groupId)
       .then(setBills)
       .catch(() => setBills([]));
-    groupsService.getSummary(groupId)
-      .then(setSummary)
-      .catch(() => setSummary({}));
   }, [groupId]);
 
   useEffect(() => {
@@ -148,6 +183,9 @@ export default function GroupPage({
         {group.members.map((member, i) => (
         <AvatarWithTooltip key={i} name={member.display_name} />
           ))}
+          {pendingInvites.map((email, i) => (
+            <GhostAvatar key={`ghost-${i}`} email={email} />
+          ))}
         </div>
       </section>
 
@@ -156,7 +194,7 @@ export default function GroupPage({
         {/* Bills section */}
         <section className="flex flex-1 flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Bills</h2>
+            <h2 className="text-lg font-semibold">Your Bills</h2>
             <Button size="sm" onClick={() => setBillOpen(true)}>Add Bill</Button>
           </div>
           {bills.length === 0 ? (
@@ -215,36 +253,33 @@ export default function GroupPage({
           )}
         </section>
 
-        {/* Balances section */}
+        {/* Your Debts section */}
         <section className="flex flex-1 flex-col gap-3">
-          <h2 className="text-lg font-semibold">Balances</h2>
-          {Object.keys(summary).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No balances yet.</p>
+          <h2 className="text-lg font-semibold">Your Debts</h2>
+          {debts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No debts yet.</p>
           ) : (
-            <div className="flex flex-col gap-2 overflow-y-auto pr-1">
-              {Object.entries(summary).map(([memberId, data]) => {
-                const net = data.they_owe_me - data.i_owe_them;
-                if (net === 0) return null;
-                return (
-                  <div
-                    key={memberId}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <span className="text-sm">
-                      {net > 0
-                        ? `${data.display_name} owes you`
-                        : `You owe ${data.display_name}`}
-                    </span>
-                    <span
-                      className={`text-sm font-semibold ${
-                        net > 0 ? "text-green-600" : "text-destructive"
-                      }`}
-                    >
-                      ${Math.abs(net).toFixed(2)}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+              {debts.map((debt) => (
+                <Card
+                  key={debt.id}
+                  className="cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => setSelectedDebt(debt)}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-base">{debt.bill.name}</CardTitle>
+                    <CardDescription className="text-xs">
+                      {new Date(debt.bill.date_created).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 flex flex-col gap-1">
+                    <p className="text-xl font-bold">${parseFloat(debt.amount).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Owed to: {debt.bill.user_owed.display_name}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </section>
@@ -267,6 +302,12 @@ export default function GroupPage({
         open={billOpen}
         onOpenChange={handleBillClose}
         onSave={handleCreateBillSaved}
+      />
+
+      <DebtDetail
+        debt={selectedDebt}
+        open={selectedDebt !== null}
+        onOpenChange={(open) => { if (!open) setSelectedDebt(null); }}
       />
     </div>
   );

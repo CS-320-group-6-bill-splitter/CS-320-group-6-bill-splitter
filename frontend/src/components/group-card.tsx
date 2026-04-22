@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Household } from "@/types";
 import {
@@ -10,6 +11,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
+import { GhostAvatar } from "@/components/ghost-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,12 +20,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, UserPlus, LogOut } from "lucide-react";
 import { groupsService } from "@/services/groups";
+import InviteMember from "@/components/modals/InviteMember";
+
 interface GroupCardProps {
   group: Household;
   totalAmount?: number;
   billCount?: number;
   balanceText?: string;
+  pendingInvites?: string[];
   onLeave?: () => void;
+  onInvite?: (email: string) => void;
 }
 
 export function GroupCard({
@@ -31,8 +37,12 @@ export function GroupCard({
   totalAmount = 0,
   billCount = 0,
   balanceText,
+  pendingInvites = [],
   onLeave,
+  onInvite,
 }: GroupCardProps) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+
   return (
     <Card className="relative cursor-pointer hover:bg-muted/50 transition-colors">
       <div

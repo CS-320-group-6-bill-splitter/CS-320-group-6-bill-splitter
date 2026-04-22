@@ -10,3 +10,5 @@ db.sqlite3
 secrets.sh
 /Makefile
 venv/   
+
+.env
