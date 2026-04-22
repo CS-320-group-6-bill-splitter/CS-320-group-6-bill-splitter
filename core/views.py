@@ -352,7 +352,6 @@ class BillDetailView(APIView):
 
       
 class DebtListView(APIView):
-    """Debt list"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, household_id):
@@ -366,8 +365,15 @@ class DebtListView(APIView):
             user_owing=request.user
         )
 
-        serializer = DebtSerializer(debts, many=True)
-        return Response(serializer.data)
+        status_filter = request.query_params.get("status")
+
+        if status_filter == "paid":
+            debts = debts.filter(is_resolved=True)
+
+        elif status_filter == "unpaid":
+            debts = debts.filter(is_resolved=False)
+
+        return Response(DebtSerializer(debts, many=True).data)
 
 class DebtDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -411,10 +417,14 @@ class DebtPayView(APIView):
         if amount <= 0:
             return Response({'error': 'Amount must be positive'}, status=400)
 
-        payment = Payment.objects.create(
-            debt=debt,
+        if amount > debt.amount:
+            return Response({'error': 'Cannot pay more than debt amount'}, status=400)
+
+        # 🚨 IMPORTANT: use manager (your model logic already depends on it)
+        payment = Payment.objects.create_payment(
             amount=amount,
-            user_paying=request.user
+            user_paying=request.user,
+            debt=debt
         )
 
         return Response(PaymentSerializer(payment).data, status=201)
