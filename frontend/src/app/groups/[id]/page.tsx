@@ -3,7 +3,7 @@
 import { use, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import CreateBill from "@/components/modals/CreateBill";
-import DebtDetail from "@/components/modals/DebtDetail";
+import BillDetailView, { Debtor } from "@/components/modals/BillDetailView";
 import {
   Card,
   CardHeader,
@@ -23,12 +23,28 @@ export default function GroupPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
+  const [mockPaidByBill, setMockPaidByBill] = useState<Record<number, Record<number, number>>>({});
   const { id } = use(params);
   const groupId = Number(id);
   const [billOpen, setBillOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [group, setGroup] = useState<Household | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
+  const mockBills: Bill[] = [
+    {
+      id: -1,
+      name: "Mock Dinner Bill",
+      amount: "100.00",
+      date_created: new Date().toISOString(),
+      users_owing: [
+        { id: 101, display_name: "artichoke", email: "a@example.com" },
+        { id: 102, display_name: "bart", email: "b@example.com" },
+        { id: 103, display_name: "chad", email: "c@example.com" },
+      ],
+    },
+  ];
+  const [summary, setSummary] = useState<HouseholdSummary>({});
   const [loading, setLoading] = useState(true);
 
   // Dummy debt data (replace with debtsService.getByHousehold(groupId) once backend is ready)
@@ -87,6 +103,59 @@ export default function GroupPage({
     if (!open) fetchData();
   }
 
+  const visibleBills = bills.length > 0 ? bills : mockBills;
+  const selectedVisibleBill = visibleBills.find((b) => b.id === selectedBillId) ?? null;
+
+  function buildDebtorsForBill(bill: Bill): Debtor[] {
+    const total = Number(bill.amount) || 0;
+    const users = bill.users_owing ?? [];
+    if (users.length === 0) return [];
+
+    const equalShare = total / users.length;
+    const paidMap = mockPaidByBill[bill.id] ?? {};
+
+    return users.map((u) => ({
+      id: u.id,
+      name: u.display_name,
+      totalOwed: equalShare,
+      paidAmount: paidMap[u.id] ?? 0,
+    }));
+  }
+
+  function handleChangePaid(billId: number, debtorId: number, nextPaid: number) {
+    setMockPaidByBill((prev) => ({
+      ...prev,
+      [billId]: {
+        ...(prev[billId] ?? {}),
+        [debtorId]: nextPaid,
+      },
+    }));
+  }
+  async function handleCreateBillSaved(bill: {
+    expenseName: string;
+    amount: number;
+    paidBy: string;
+    splits: { name: string; amount: number; percent: number }[];
+  }) {
+    const debts: Record<number, number> = {};
+    for (const split of bill.splits) {
+      if (split.name === bill.paidBy) continue;
+      const member = group.members.find((m) => m.display_name === split.name);
+      if (member) debts[member.id] = split.amount;
+    }
+    try {
+      await billsService.create(groupId, {
+        name: bill.expenseName,
+        amount: bill.amount,
+        debts,
+      });
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Could not create bill");
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center pt-20">
@@ -111,8 +180,8 @@ export default function GroupPage({
           Members ({group.member_count})
         </h2>
         <div className="flex gap-2">
-          {group.members.map((member, i) => (
-            <AvatarWithTooltip key={i} name={member} />
+        {group.members.map((member, i) => (
+        <AvatarWithTooltip key={i} name={member.display_name} />
           ))}
           {pendingInvites.map((email, i) => (
             <GhostAvatar key={`ghost-${i}`} email={email} />
@@ -133,7 +202,37 @@ export default function GroupPage({
           ) : (
             <div className="flex flex-col gap-3 overflow-y-auto pr-1">
               {bills.map((bill) => (
-                <Card key={bill.id}>
+                <Card
+                  key={bill.id}
+                  className="cursor-pointer transition hover:shadow-md border border-black"
+                  onClick={() => setSelectedBillId(bill.id)}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-base">{bill.name}</CardTitle>
+                    <CardDescription className="text-xs">
+                      {new Date(bill.date_created).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 flex flex-col gap-1">
+                    <p className="text-xl font-bold">${bill.amount}</p>
+                    {bill.users_owing.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Owed by: {bill.users_owing.map((u) => u.display_name).join(", ")}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          {bills.length === 0 && (
+            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+              {mockBills.map((bill) => (
+                <Card
+                  key={bill.id}
+                  className="cursor-pointer transition hover:shadow-md"
+                  onClick={() => setSelectedBillId(bill.id)}
+                >
                   <CardHeader className="p-4 pb-2">
                     <CardTitle className="text-base">{bill.name}</CardTitle>
                     <CardDescription className="text-xs">
@@ -186,10 +285,23 @@ export default function GroupPage({
         </section>
       </div>
 
-      <CreateBill
-        members={group.members.map((m) => ({ name: parseMemberName(m) }))}
+      {selectedVisibleBill && (
+        <BillDetailView
+          billName={selectedVisibleBill.name}
+          totalAmount={Number(selectedVisibleBill.amount) || 0}
+          debtors={buildDebtorsForBill(selectedVisibleBill)}
+          onClose={() => setSelectedBillId(null)}
+          onChangePaid={(debtorId, nextPaid) =>
+            handleChangePaid(selectedVisibleBill.id, debtorId, nextPaid)
+          }
+        />
+      )}
+
+        <CreateBill
+        members={group.members.map((m) => ({ name: m.display_name }))}
         open={billOpen}
         onOpenChange={handleBillClose}
+        onSave={handleCreateBillSaved}
       />
 
       <DebtDetail

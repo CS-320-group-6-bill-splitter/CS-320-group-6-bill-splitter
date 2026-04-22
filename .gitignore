@@ -8,5 +8,7 @@ db.sqlite3
 
 # Environment
 secrets.sh
+/Makefile
+venv/   
 
 .env
