@@ -363,7 +363,7 @@ class DebtListView(APIView):
         debts = Debt.objects.filter(
             bill__household=household,
             user_owing=request.user
-        )
+        ).distinct()
 
         status_filter = request.query_params.get("status")
 
@@ -420,12 +420,17 @@ class DebtPayView(APIView):
         if amount > debt.amount:
             return Response({'error': 'Cannot pay more than debt amount'}, status=400)
 
-        # 🚨 IMPORTANT: use manager (your model logic already depends on it)
         payment = Payment.objects.create_payment(
             amount=amount,
             user_paying=request.user,
             debt=debt
         )
+
+        total_paid = sum(debt.payments.values_list("amount", flat=True))
+
+        if total_paid >= float(debt.amount):
+            debt.is_resolved = True
+            debt.save()
 
         return Response(PaymentSerializer(payment).data, status=201)
 
@@ -446,10 +451,10 @@ class DebtFilterView(APIView):
         status_filter = request.query_params.get("status")
 
         if status_filter == "paid":
-            debts = debts.filter(payments__isnull=False).distinct()
+            debts = debts.filter(is_resloved=True)
 
         elif status_filter == "unpaid":
-            debts = debts.filter(payments__isnull=True)
+            debts = debts.filter(is_resolved=False)
 
         return Response(DebtSerializer(debts, many=True).data)
       
