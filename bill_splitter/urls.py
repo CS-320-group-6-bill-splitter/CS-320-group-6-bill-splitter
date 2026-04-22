@@ -74,9 +74,34 @@ urlpatterns = [
         views.PaymentListByBillView.as_view(),
         name='payment-list-by-bill',
     ),
+    
     path(
         'payments/list-debt/<int:debt_id>/',
         views.PaymentListByDebtView.as_view(),
         name='payment-list-by-debt',
+    ),
+    
+    path(
+        'debts/list/<int:household_id>/',
+        views.DebtListView.as_view(),
+        name='debt-list',
+    ),
+    
+    path(
+        'debts/detail/<int:household_id>/<int:debt_id>/',
+        views.DebtDetailView.as_view(),
+        name='debt-detail',
+    ),
+    
+    path(
+        'debts/pay/<int:household_id>/<int:debt_id>/',
+        views.DebtPayView.as_view(),
+        name='debt-pay',
+    ),
+    
+    path(
+        'debts/filter/<int:household_id>/',
+        views.DebtFilterView.as_view(),
+        name='debt-filter',
     )
 ]
