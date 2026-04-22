@@ -127,22 +127,18 @@ class DebtSerializer(serializers.ModelSerializer):
     """Serializer for the Debt model."""
 
     user_owing = UserSerializer(read_only=True)
-    user_owed = serializers.SerializerMethodField()
+    user_owed = UserSerializer(source='bill.user_owed', read_only=True)
     bill_name = serializers.CharField(source='bill.name', read_only=True)
+    is_resolved = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Debt
         fields = [
             'id',
             'amount',
+            'is_resolved',
             'user_owing',
             'user_owed',
             'bill',
             'bill_name',
         ]
-
-    def get_user_owed(self, debt):
-        return {
-            'id': debt.bill.user_owed.id,
-            'display_name': debt.bill.user_owed.display_name
-        }
