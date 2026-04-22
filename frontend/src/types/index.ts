@@ -7,11 +7,17 @@ export interface User {
   profile_picture?: string | null;
 }
 
+export interface PendingInvitation {
+  email: string;
+  created_at: string;
+}
+
 export interface Household {
   id: number;
   name: string;
-  members: { id: number; display_name: string }[];;
+  members: { id: number; display_name: string }[];
   member_count: number;
+  pending_invitations?: PendingInvitation[];
 }
 
 export interface HouseholdSummary {
@@ -64,11 +70,20 @@ export interface Debt {
   payments: DebtPayment[];
 }
 
+// Matches the backend HouseholdInvitationSerializer response
 export interface Invite {
-  id: number;
+  token: string;
+  household_id: number;
+  household_name: string;
   email: string;
-  household: Household;
   status: "pending" | "accepted" | "declined";
+  created_at: string;
+}
+
+// Combined response from GET /households/
+export interface HouseholdsResponse {
+  memberships: Household[];
+  invitations: Invite[];
 }
 
 // Keep Group as alias for backwards compat in components

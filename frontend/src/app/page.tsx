@@ -13,6 +13,7 @@ import { GhostGroupCard } from "@/components/ghost-group-card";
 import { Plus, ChevronDown } from "lucide-react";
 import { Household, Bill, Invite } from "@/types";
 import { billsService } from "@/services/bills";
+import { invitesService } from "@/services/invites";
 import {
   Card,
   CardHeader,
@@ -198,34 +199,19 @@ function LoggedInView() {
   const { refreshGroups } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [groups, setGroups] = useState<Household[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<Invite[]>([]);
   const [recentBills, setRecentBills] = useState<(Bill & { householdName: string })[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Dummy incoming invites (replace with invitesService.getIncoming() once backend is ready)
-  const incomingInvites: Invite[] = [
-    {
-      id: 1,
-      email: "you@example.com",
-      household: { id: 999, name: "Beach House Trip", members: ["[USER] Sarah (sarah@example.com)", "[USER] Mike (mike@example.com)"], member_count: 2 },
-      status: "pending",
-    },
-  ];
-
-  // Dummy outgoing pending invite emails per group (replace with invitesService.getOutgoing() once backend is ready)
-  // Uses the first loaded group's ID to attach demo pending invites
-  const firstGroupId = groups[0]?.id;
-  const pendingInvitesByGroup: Record<number, string[]> = firstGroupId
-    ? { [firstGroupId]: ["pending@example.com", "invited@example.com"] }
-    : {};
 
   const fetchGroups = useCallback(() => {
     setLoading(true);
     groupsService.getAll()
-      .then((g) => {
-        setGroups(g);
+      .then(({ memberships, invitations }) => {
+        setGroups(memberships);
+        setIncomingInvites(invitations);
         // Fetch bills from all households and merge
         Promise.all(
-          g.map((group) =>
+          memberships.map((group) =>
             billsService.getByHousehold(group.id)
               .then((bills) => bills.map((b) => ({ ...b, householdName: group.name })))
               .catch(() => [] as (Bill & { householdName: string })[])
@@ -238,7 +224,10 @@ function LoggedInView() {
           setRecentBills(merged);
         });
       })
-      .catch(() => setGroups([]))
+      .catch(() => {
+        setGroups([]);
+        setIncomingInvites([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -281,28 +270,34 @@ function LoggedInView() {
                 <GroupCard
                   key={group.id}
                   group={group}
-                  pendingInvites={pendingInvitesByGroup[group.id] ?? []}
+                  pendingInvites={(group.pending_invitations ?? []).map((inv) => inv.email)}
                   onLeave={handleLeave}
-                  onInvite={(email) => {
-                    // TODO: call invitesService.send(group.id, email) once backend is ready
-                    console.log(`Invite ${email} to group ${group.id}`);
-                  }}
+                  onInvite={(email) =>
+                    invitesService.send(group.id, email)
+                      .then(() => fetchGroups())
+                      .catch((err) => console.error("Failed to send invite:", err))
+                  }
                 />
               ))}
               {incomingInvites
                 .filter((inv) => inv.status === "pending")
                 .map((invite) => (
                   <GhostGroupCard
-                    key={`invite-${invite.id}`}
+                    key={`invite-${invite.token}`}
                     invite={invite}
-                    onAccept={() => {
-                      // TODO: call invitesService.accept(invite.id) once backend is ready
-                      console.log(`Accept invite ${invite.id}`);
-                    }}
-                    onDecline={() => {
-                      // TODO: call invitesService.decline(invite.id) once backend is ready
-                      console.log(`Decline invite ${invite.id}`);
-                    }}
+                    onAccept={() =>
+                      invitesService.accept(invite.token)
+                        .then(() => {
+                          fetchGroups();
+                          refreshGroups();
+                        })
+                        .catch((err) => console.error("Failed to accept:", err))
+                    }
+                    onDecline={() =>
+                      invitesService.decline(invite.token)
+                        .then(() => fetchGroups())
+                        .catch((err) => console.error("Failed to decline:", err))
+                    }
                   />
                 ))}
             </div>

@@ -4,6 +4,7 @@ import { use, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import CreateBill from "@/components/modals/CreateBill";
 import BillDetailView, { Debtor } from "@/components/modals/BillDetailView";
+import DebtDetail from "@/components/modals/DebtDetail";
 import {
   Card,
   CardHeader,
@@ -15,7 +16,7 @@ import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
 import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
 import { billsService } from "@/services/bills";
-import { Household, Bill, Debt } from "@/types";
+import { Household, Bill, Debt, HouseholdSummary } from "@/types";
 import { parseMemberName } from "@/lib/utils";
 
 export default function GroupPage({
@@ -80,8 +81,7 @@ export default function GroupPage({
     },
   ];
 
-  // Dummy pending invites for this group (replace with invitesService.getOutgoing(groupId) once backend is ready)
-  const pendingInvites = ["pending@example.com", "invited@example.com"];
+  const pendingInvites = (group?.pending_invitations ?? []).map((inv) => inv.email);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -140,7 +140,7 @@ export default function GroupPage({
     const debts: Record<number, number> = {};
     for (const split of bill.splits) {
       if (split.name === bill.paidBy) continue;
-      const member = group.members.find((m) => m.display_name === split.name);
+      const member = group?.members.find((m) => m.display_name === split.name);
       if (member) debts[member.id] = split.amount;
     }
     try {
@@ -307,7 +307,8 @@ export default function GroupPage({
       <DebtDetail
         debt={selectedDebt}
         open={selectedDebt !== null}
-        onOpenChange={(open) => { if (!open) setSelectedDebt(null); }}
+        onOpenChange={(open: boolean) => { if (!open) setSelectedDebt(null); }}
+        onPaymentSubmitted={fetchData}
       />
     </div>
   );

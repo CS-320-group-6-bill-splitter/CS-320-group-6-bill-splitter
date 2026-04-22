@@ -4,16 +4,18 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import type { Debt, DebtPayment } from "@/types";
+import { debtsService } from "@/services/debts";
 
 type DebtDetailProps = {
   debt: Debt | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPaymentSubmitted?: () => void;
 };
 
 const PAYMENT_METHODS = ["Credit Card", "Debit Card", "Venmo", "Zelle", "PayPal", "Cash"];
 
-export default function DebtDetail({ debt, open, onOpenChange }: DebtDetailProps) {
+export default function DebtDetail({ debt, open, onOpenChange, onPaymentSubmitted }: DebtDetailProps) {
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [inputValue, setInputValue] = useState("");
@@ -386,7 +388,22 @@ export default function DebtDetail({ debt, open, onOpenChange }: DebtDetailProps
               </select>
             </div>
             <button
-              onClick={() => onOpenChange(false)}
+              onClick={async () => {
+                if (!debt || paymentAmount <= 0) {
+                  onOpenChange(false);
+                  return;
+                }
+                try {
+                  await debtsService.createPayment(debt.id, {
+                    amount: paymentAmount,
+                    method: paymentMethod,
+                  });
+                  onPaymentSubmitted?.();
+                } catch (err) {
+                  console.error("Failed to submit payment:", err);
+                }
+                onOpenChange(false);
+              }}
               style={{
                 padding: "12px 28px",
                 borderRadius: "50px",

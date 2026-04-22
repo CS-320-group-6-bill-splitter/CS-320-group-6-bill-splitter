@@ -1,25 +1,30 @@
 import { apiFetch } from "./api";
 import { Invite } from "@/types";
 
-// Endpoints TBD — update paths once backend views are implemented
 export const invitesService = {
-  /** Invites sent to others for households the user owns/belongs to */
-  getOutgoing: (householdId: number) =>
-    apiFetch<Invite[]>(`/households/${householdId}/invites/`),
-
-  /** Invites the current user has received */
-  getIncoming: () =>
-    apiFetch<Invite[]>(`/invites/incoming/`),
-
+  /** Send an invitation by email to a household. */
   send: (householdId: number, email: string) =>
-    apiFetch<Invite>(`/households/${householdId}/invites/`, {
+    apiFetch<Invite>(`/households/${householdId}/invite/`, {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
 
-  accept: (inviteId: number) =>
-    apiFetch<void>(`/invites/${inviteId}/accept/`, { method: "POST" }),
+  /** Respond to a pending invitation (accept or decline) using its token. */
+  respond: (token: string, action: "accept" | "decline") =>
+    apiFetch<{ message: string }>(`/invitations/${token}/respond/`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
 
-  decline: (inviteId: number) =>
-    apiFetch<void>(`/invites/${inviteId}/decline/`, { method: "POST" }),
+  accept: (token: string) =>
+    apiFetch<{ message: string }>(`/invitations/${token}/respond/`, {
+      method: "POST",
+      body: JSON.stringify({ action: "accept" }),
+    }),
+
+  decline: (token: string) =>
+    apiFetch<{ message: string }>(`/invitations/${token}/respond/`, {
+      method: "POST",
+      body: JSON.stringify({ action: "decline" }),
+    }),
 };

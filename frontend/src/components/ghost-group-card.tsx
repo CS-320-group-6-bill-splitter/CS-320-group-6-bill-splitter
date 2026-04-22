@@ -8,8 +8,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
-import { Check, X } from "lucide-react";
+import { Check, X, Mail } from "lucide-react";
 
 interface GhostGroupCardProps {
   invite: Invite;
@@ -18,8 +17,6 @@ interface GhostGroupCardProps {
 }
 
 export function GhostGroupCard({ invite, onAccept, onDecline }: GhostGroupCardProps) {
-  const { household } = invite;
-
   return (
     <Card
       className="relative transition-colors border-2 border-dashed border-muted-foreground/40 opacity-75"
@@ -49,7 +46,7 @@ export function GhostGroupCard({ invite, onAccept, onDecline }: GhostGroupCardPr
       </div>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {household.name}
+          {invite.household_name}
           <span
             style={{
               fontSize: "11px",
@@ -64,17 +61,14 @@ export function GhostGroupCard({ invite, onAccept, onDecline }: GhostGroupCardPr
           </span>
         </CardTitle>
         <CardDescription>
-          {household.member_count} member{household.member_count !== 1 ? "s" : ""}
+          Invitation pending · {new Date(invite.created_at).toLocaleDateString()}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {household.members.length > 0 && (
-          <div className="flex items-center gap-1">
-            {household.members.map((member, i) => (
-              <AvatarWithTooltip key={i} name={member} className="h-7 w-7 text-xs" />
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Mail className="h-4 w-4" />
+          {invite.email}
+        </div>
       </CardContent>
     </Card>
   );
