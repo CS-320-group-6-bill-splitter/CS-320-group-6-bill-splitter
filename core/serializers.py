@@ -122,3 +122,27 @@ class PaymentSerializer(serializers.ModelSerializer):
     def get_user_to(self, payment):
         """Return the display name of the user receiving the payment."""
         return payment.debt.bill.user_owed.display_name
+
+class DebtSerializer(serializers.ModelSerializer):
+    """Serializer for the Debt model."""
+
+    user_owing = UserSerializer(read_only=True)
+    user_owed = serializers.SerializerMethodField()
+    bill_name = serializers.CharField(source='bill.name', read_only=True)
+
+    class Meta:
+        model = Debt
+        fields = [
+            'id',
+            'amount',
+            'user_owing',
+            'user_owed',
+            'bill',
+            'bill_name',
+        ]
+
+    def get_user_owed(self, debt):
+        return {
+            'id': debt.bill.user_owed.id,
+            'display_name': debt.bill.user_owed.display_name
+        }
