@@ -9,9 +9,12 @@ import { ShorelineWaves } from "@/components/shoreline-waves";
 import { WetSandOverlay } from "@/components/wet-sand-overlay";
 import { CreateGroupModal } from "@/components/modals/create-group-modal";
 import { GroupCard } from "@/components/group-card";
+import { GhostGroupCard } from "@/components/ghost-group-card";
+import DebtDetail from "@/components/modals/DebtDetail";
 import { Plus, ChevronDown } from "lucide-react";
-import { Household, Bill } from "@/types";
-import { billsService } from "@/services/bills";
+import { Household, Debt, Invite } from "@/types";
+import { debtsService } from "@/services/debts";
+import { invitesService } from "@/services/invites";
 import {
   Card,
   CardHeader,
@@ -141,7 +144,7 @@ function LoggedOutView() {
   return (
     <div className="relative">
       {/* Sand — fixed behind everything */}
-      <div className="fixed inset-0 z-0 flex flex-col items-center justify-center gap-6 bg-[#e8c87a] px-4 text-center text-[#0a2463]">
+      <div className="sand-bg fixed inset-0 z-0 flex flex-col items-center justify-center gap-6 bg-[#e8c87a] px-4 text-center text-[#0a2463]">
         {/* Wet sand overlay with wavy edge */}
         <WetSandOverlay dryLine={dryLine} />
         <h2 className="relative z-10 text-3xl font-bold tracking-tight">
@@ -193,34 +196,43 @@ function LoggedOutView() {
   );
 }
 
+type RecentDebt = Debt & { householdName: string; householdId: number };
+
 function LoggedInView() {
   const { refreshGroups } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [groups, setGroups] = useState<Household[]>([]);
-  const [recentBills, setRecentBills] = useState<(Bill & { householdName: string })[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<Invite[]>([]);
+  const [recentDebts, setRecentDebts] = useState<RecentDebt[]>([]);
+  const [selectedDebt, setSelectedDebt] = useState<RecentDebt | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchGroups = useCallback(() => {
     setLoading(true);
     groupsService.getAll()
-      .then((g) => {
-        setGroups(g);
-        // Fetch bills from all households and merge
+      .then(({ memberships, invitations }) => {
+        setGroups(memberships);
+        setIncomingInvites(invitations);
+        // Fetch debts the user owes from all households and merge
         Promise.all(
-          g.map((group) =>
-            billsService.getByHousehold(group.id)
-              .then((bills) => bills.map((b) => ({ ...b, householdName: group.name })))
-              .catch(() => [] as (Bill & { householdName: string })[])
+          memberships.map((group) =>
+            debtsService.getByHousehold(group.id)
+              .then((debts) => debts.map((d) => ({ ...d, householdName: group.name, householdId: group.id })))
+              .catch(() => [] as RecentDebt[])
           )
-        ).then((allBills) => {
-          const merged = allBills
+        ).then((allDebts) => {
+          const merged = allDebts
             .flat()
-            .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime())
+            .filter((d) => !d.is_resolved)
+            .sort((a, b) => b.id - a.id)
             .slice(0, 3);
-          setRecentBills(merged);
+          setRecentDebts(merged);
         });
       })
-      .catch(() => setGroups([]))
+      .catch(() => {
+        setGroups([]);
+        setIncomingInvites([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -247,7 +259,7 @@ function LoggedInView() {
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Groups section — left side */}
         <section className="flex flex-1 flex-col gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-6">
             <h1 className="text-2xl font-bold">Your Groups</h1>
             <Button variant="ghost" size="icon" onClick={() => setCreateOpen(true)}>
               <Plus className="h-5 w-5" />
@@ -255,45 +267,90 @@ function LoggedInView() {
           </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading groups...</p>
-          ) : groups.length === 0 ? (
+          ) : groups.length === 0 && incomingInvites.length === 0 ? (
             <p className="text-sm text-muted-foreground">No groups yet. Create one to get started!</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto pr-1">
+            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto px-6 pt-6 pb-10">
               {groups.map((group) => (
                 <GroupCard
                   key={group.id}
                   group={group}
+                  pendingInvites={(group.pending_invitations ?? []).map((inv) => inv.email)}
                   onLeave={handleLeave}
+                  onInvite={(email) =>
+                    invitesService.send(group.id, email)
+                      .then(() => fetchGroups())
+                      .catch((err) => console.error("Failed to send invite:", err))
+                  }
                 />
               ))}
+              {incomingInvites
+                .filter((inv) => inv.status === "pending")
+                .map((invite) => (
+                  <GhostGroupCard
+                    key={`invite-${invite.token}`}
+                    invite={invite}
+                    onAccept={() =>
+                      invitesService.accept(invite.token)
+                        .then(() => {
+                          fetchGroups();
+                          refreshGroups();
+                        })
+                        .catch((err) => console.error("Failed to accept:", err))
+                    }
+                    onDecline={() =>
+                      invitesService.decline(invite.token)
+                        .then(() => fetchGroups())
+                        .catch((err) => console.error("Failed to decline:", err))
+                    }
+                  />
+                ))}
             </div>
           )}
         </section>
 
-        {/* Recent Bills section — right side */}
+        {/* Recent Debts section — right side */}
         <section className="flex w-80 shrink-0 flex-col gap-4">
-          <h2 className="text-2xl font-bold">Recent Bills</h2>
-          {recentBills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recent bills.</p>
+          <h2 className="text-2xl font-bold px-6">Recent Debts</h2>
+          {recentDebts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent debts.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
-              {recentBills.map((bill) => (
-                <Card key={bill.id}>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-base">{bill.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {bill.householdName} · {new Date(bill.date_created).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <p className="text-xl font-bold">${bill.amount}</p>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="flex flex-col gap-3 overflow-y-auto px-6 pt-6 pb-10">
+              {recentDebts.map((debt) => {
+                const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
+                return (
+                  <Card
+                    key={debt.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedDebt(debt)}
+                  >
+                    <CardHeader className="p-4 pb-2">
+                      <CardTitle className="text-base">{debt.bill_name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {debt.householdName} · Owed to {debt.user_owed.display_name}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <p className="text-xl font-bold">${remaining.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        of ${parseFloat(debt.amount).toFixed(2)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </section>
       </div>
+
+      <DebtDetail
+        debt={selectedDebt}
+        householdId={selectedDebt?.householdId ?? 0}
+        open={selectedDebt !== null}
+        onOpenChange={(open) => { if (!open) setSelectedDebt(null); }}
+        onPaymentSubmitted={fetchGroups}
+      />
     </div>
   );
 }

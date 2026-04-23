@@ -37,7 +37,7 @@ export function Header() {
   const fetchHouseholds = useCallback(() => {
     if (!user) return;
     groupsService.getAll()
-      .then((groups) => setHouseholdNames(groups.map((g) => g.name)))
+      .then(({ memberships }) => setHouseholdNames(memberships.map((g) => g.name)))
       .catch(() => setHouseholdNames([]));
   }, [user, groupsVersion]);
 
@@ -130,7 +130,7 @@ export function Header() {
       <UserProfile
         user={{
           name: user.display_name,
-          households: householdNames,
+          groups: householdNames,
         }}
         open={profileOpen}
         onOpenChange={setProfileOpen}

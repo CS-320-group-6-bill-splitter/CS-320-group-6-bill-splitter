@@ -2,7 +2,7 @@
 
 type User = {
   name: string;
-  households: string[];
+  groups: string[];
 };
 
 interface UserProfileProps {
@@ -85,7 +85,7 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
             </div>
           </div>
 
-          {/* households */}
+          {/* groups */}
           <div style={{ marginBottom: "24px" }}>
             <label
               style={{
@@ -96,9 +96,9 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
                 marginBottom: "8px",
               }}
             >
-              Households
+              Groups
             </label>
-            {user.households.map((house, i) => (
+            {user.groups.map((group, i) => (
               <div
                 key={i}
                 style={{
@@ -109,11 +109,11 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
                   color: "#012B43",
                   fontSize: "15px",
                   fontWeight: 500,
-                  marginBottom: i < user.households.length - 1 ? "10px" : 0,
+                  marginBottom: i < user.groups.length - 1 ? "10px" : 0,
                   boxSizing: "border-box",
                 }}
               >
-                {house}
+                {group}
               </div>
             ))}
           </div>

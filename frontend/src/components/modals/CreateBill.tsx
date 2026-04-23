@@ -61,11 +61,44 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
     [n]
   );
   const [dividers, setDividers] = useState<number[]>(initDividers);
+  // Per-segment text being typed into either the % or $ input. Cleared on blur/commit.
+  const [editText, setEditText] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setDividers(initDividers());
     setPaidBy(members[0]?.name ?? "");
+    setEditText({});
   }, [members, initDividers]);
+
+  /**
+   * Set segment `idx` to fraction `f` (clamped to [0,1]) and redistribute the
+   * remaining (1 - f) across the other segments in proportion to their current
+   * fractions. If they currently sum to 0, distribute evenly.
+   */
+  const setSegmentFraction = (idx: number, f: number) => {
+    if (!Number.isFinite(f)) return;
+    const positions = [0, ...dividers, 1];
+    const fractions = members.map((_, i) => positions[i + 1] - positions[i]);
+
+    const clamped = Math.max(0, Math.min(1, f));
+    const remaining = 1 - clamped;
+    const otherSum = fractions.reduce((sum, fr, i) => (i === idx ? sum : sum + fr), 0);
+
+    const next = fractions.map((fr, i) => {
+      if (i === idx) return clamped;
+      if (otherSum === 0) return remaining / Math.max(1, members.length - 1);
+      return (fr / otherSum) * remaining;
+    });
+
+    // Rebuild cumulative dividers from fractions
+    const nextDividers: number[] = [];
+    let acc = 0;
+    for (let i = 0; i < members.length - 1; i++) {
+      acc += next[i];
+      nextDividers.push(acc);
+    }
+    setDividers(nextDividers);
+  };
 
   const barRef = useRef<HTMLDivElement>(null);
   const draggingIdx = useRef<number | null>(null);
@@ -332,7 +365,7 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
                 />
               ))}
 
-              {/* Draggable dividers */}
+              {/* Draggable dividers — dot handles, matching DebtDetail */}
               {dividers.map((pos, i) => (
                 <div
                   key={i}
@@ -341,30 +374,54 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
                   style={{
                     position: "absolute",
                     left: `${pos * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: "4px",
-                    transform: "translateX(-50%)",
-                    background: "#D9F2FF",
-                    cursor: "col-resize",
+                    top: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    background: "#012B43",
+                    border: "3px solid #D9F2FF",
+                    cursor: "grab",
                     zIndex: 10,
-                    borderRadius: "2px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
                   }}
                 />
               ))}
             </div>
 
-            {/* Amount labels below bar */}
+            {/* Editable amount/percentage labels below bar */}
             <div
               style={{
                 position: "relative",
-                height: "36px",
+                height: "44px",
                 marginTop: "6px",
               }}
             >
               {segments.map((seg, i) => {
                 const positions = [0, ...dividers, 1];
                 const center = (positions[i] + positions[i + 1]) / 2;
+                const pctKey = `pct-${i}`;
+                const amtKey = `amt-${i}`;
+                const pctValue = editText[pctKey] ?? (seg.fraction * 100).toFixed(0);
+                const amtValue = editText[amtKey] ?? (seg.fraction * total).toFixed(2);
+
+                const commitPct = () => {
+                  const raw = editText[pctKey];
+                  setEditText((p) => { const n = { ...p }; delete n[pctKey]; return n; });
+                  if (raw === undefined || raw.trim() === "") return;
+                  const num = parseFloat(raw);
+                  if (!Number.isFinite(num)) return;
+                  setSegmentFraction(i, num / 100);
+                };
+                const commitAmt = () => {
+                  const raw = editText[amtKey];
+                  setEditText((p) => { const n = { ...p }; delete n[amtKey]; return n; });
+                  if (raw === undefined || raw.trim() === "") return;
+                  const num = parseFloat(raw);
+                  if (!Number.isFinite(num) || total <= 0) return;
+                  setSegmentFraction(i, num / total);
+                };
+
                 return (
                   <div
                     key={i}
@@ -374,13 +431,38 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
                       transform: "translateX(-50%)",
                       textAlign: "center",
                       color: "#012B43",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "2px",
                     }}
                   >
-                    <div style={{ fontSize: "11px", fontWeight: 600 }}>
-                      {(seg.fraction * 100).toFixed(0)}%
+                    <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={pctValue}
+                        onChange={(e) => setEditText((p) => ({ ...p, [pctKey]: e.target.value }))}
+                        onBlur={commitPct}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={miniInputStyle}
+                      />
+                      <span style={{ fontSize: "11px", fontWeight: 600 }}>%</span>
                     </div>
-                    <div style={{ fontSize: "13px", fontWeight: 700 }}>
-                      ${(seg.fraction * total).toFixed(2)}
+                    <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 700 }}>$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={amtValue}
+                        onChange={(e) => setEditText((p) => ({ ...p, [amtKey]: e.target.value }))}
+                        onBlur={commitAmt}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ ...miniInputStyle, fontWeight: 700, width: "56px" }}
+                      />
                     </div>
                   </div>
                 );
@@ -452,5 +534,18 @@ const inputStyle: React.CSSProperties = {
   fontSize: "15px",
   fontWeight: 500,
   boxSizing: "border-box",
+  outline: "none",
+};
+
+const miniInputStyle: React.CSSProperties = {
+  width: "40px",
+  padding: "2px 4px",
+  borderRadius: "6px",
+  background: "transparent",
+  border: "1px solid transparent",
+  color: "#012B43",
+  fontSize: "11px",
+  fontWeight: 600,
+  textAlign: "center",
   outline: "none",
 };
