@@ -3,6 +3,8 @@
 import { use, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import CreateBill from "@/components/modals/CreateBill";
+import BillDetailView, { Debtor } from "@/components/modals/BillDetailView";
+import DebtDetail from "@/components/modals/DebtDetail";
 import {
   Card,
   CardHeader,
@@ -11,9 +13,11 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
+import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
 import { billsService } from "@/services/bills";
-import { Household, HouseholdSummary, Bill } from "@/types";
+import { debtsService } from "@/services/debts";
+import { Household, Bill, Debt, HouseholdSummary } from "@/types";
 import { parseMemberName } from "@/lib/utils";
 
 export default function GroupPage({
@@ -21,13 +25,20 @@ export default function GroupPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
+  const [mockPaidByBill, setMockPaidByBill] = useState<Record<number, Record<number, number>>>({});
   const { id } = use(params);
   const groupId = Number(id);
   const [billOpen, setBillOpen] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [group, setGroup] = useState<Household | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
   const [summary, setSummary] = useState<HouseholdSummary>({});
   const [loading, setLoading] = useState(true);
+
+  const [debts, setDebts] = useState<Debt[]>([]);
+
+  const pendingInvites = (group?.pending_invitations ?? []).map((inv) => inv.email);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -38,9 +49,9 @@ export default function GroupPage({
     billsService.getByHousehold(groupId)
       .then(setBills)
       .catch(() => setBills([]));
-    groupsService.getSummary(groupId)
-      .then(setSummary)
-      .catch(() => setSummary({}));
+    debtsService.getByHousehold(groupId)
+      .then(setDebts)
+      .catch(() => setDebts([]));
   }, [groupId]);
 
   useEffect(() => {
@@ -50,6 +61,95 @@ export default function GroupPage({
   function handleBillClose(open: boolean) {
     setBillOpen(open);
     if (!open) fetchData();
+  }
+
+  const selectedVisibleBill = bills.find((b) => b.id === selectedBillId) ?? null;
+
+  function buildDebtorsForBill(bill: Bill): Debtor[] {
+    const debts = bill.debts ?? [];
+    if (debts.length === 0) return [];
+
+    const overrideMap = mockPaidByBill[bill.id] ?? {};
+
+    return debts.map((d) => ({
+      id: d.user.id,
+      debtId: d.id,
+      name: d.user.display_name,
+      totalOwed: parseFloat(d.amount),
+      paidAmount: overrideMap[d.user.id] ?? parseFloat(d.paid_amount),
+    }));
+  }
+
+  async function handleChangePaid(billId: number, debtor: Debtor, nextPaid: number) {
+    // Optimistic UI update
+    setMockPaidByBill((prev) => ({
+      ...prev,
+      [billId]: {
+        ...(prev[billId] ?? {}),
+        [debtor.id]: nextPaid,
+      },
+    }));
+
+    // Mock bill (no real backend record) — local only
+    if (debtor.debtId < 0) return;
+
+    const delta = nextPaid - debtor.paidAmount;
+    if (delta === 0) return;
+    if (delta < 0) {
+      // Recording a negative payment isn't supported by the backend yet.
+      console.warn("Reducing paid amount is not supported");
+      return;
+    }
+
+    try {
+      await debtsService.createPayment(groupId, debtor.debtId, { amount: delta });
+      await fetchData();
+      // Clear the optimistic override now that real data is fresh
+      setMockPaidByBill((prev) => {
+        const next = { ...prev };
+        if (next[billId]) {
+          const { [debtor.id]: _omit, ...rest } = next[billId];
+          next[billId] = rest;
+        }
+        return next;
+      });
+    } catch (e) {
+      console.error("Failed to record payment:", e);
+      // Roll back optimistic update
+      setMockPaidByBill((prev) => {
+        const next = { ...prev };
+        if (next[billId]) {
+          const { [debtor.id]: _omit, ...rest } = next[billId];
+          next[billId] = rest;
+        }
+        return next;
+      });
+      alert(e instanceof Error ? e.message : "Could not record payment");
+    }
+  }
+  async function handleCreateBillSaved(bill: {
+    expenseName: string;
+    amount: number;
+    paidBy: string;
+    splits: { name: string; amount: number; percent: number }[];
+  }) {
+    const debts: Record<number, number> = {};
+    for (const split of bill.splits) {
+      if (split.name === bill.paidBy) continue;
+      const member = group?.members.find((m) => m.display_name === split.name);
+      if (member) debts[member.id] = split.amount;
+    }
+    try {
+      await billsService.create(groupId, {
+        name: bill.expenseName,
+        amount: bill.amount,
+        debts,
+      });
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Could not create bill");
+    }
   }
 
   if (loading) {
@@ -76,8 +176,11 @@ export default function GroupPage({
           Members ({group.member_count})
         </h2>
         <div className="flex gap-2">
-          {group.members.map((member, i) => (
-            <AvatarWithTooltip key={i} name={member} />
+        {group.members.map((member, i) => (
+        <AvatarWithTooltip key={i} name={member.display_name} />
+          ))}
+          {pendingInvites.map((email, i) => (
+            <GhostAvatar key={`ghost-${i}`} email={email} />
           ))}
         </div>
       </section>
@@ -86,16 +189,20 @@ export default function GroupPage({
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Bills section */}
         <section className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Bills</h2>
+          <div className="flex items-center justify-between px-6">
+            <h2 className="text-lg font-semibold">Your Bills</h2>
             <Button size="sm" onClick={() => setBillOpen(true)}>Add Bill</Button>
           </div>
           {bills.length === 0 ? (
             <p className="text-sm text-muted-foreground">No bills yet.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
               {bills.map((bill) => (
-                <Card key={bill.id}>
+                <Card
+                  key={bill.id}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedBillId(bill.id)}
+                >
                   <CardHeader className="p-4 pb-2">
                     <CardTitle className="text-base">{bill.name}</CardTitle>
                     <CardDescription className="text-xs">
@@ -116,34 +223,34 @@ export default function GroupPage({
           )}
         </section>
 
-        {/* Balances section */}
+        {/* Your Debts section */}
         <section className="flex flex-1 flex-col gap-3">
-          <h2 className="text-lg font-semibold">Balances</h2>
-          {Object.keys(summary).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No balances yet.</p>
+          <h2 className="text-lg font-semibold px-6">Your Debts</h2>
+          {debts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No debts yet.</p>
           ) : (
-            <div className="flex flex-col gap-2 overflow-y-auto pr-1">
-              {Object.entries(summary).map(([memberId, data]) => {
-                const net = data.they_owe_me - data.i_owe_them;
-                if (net === 0) return null;
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
+              {debts.map((debt) => {
+                const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
                 return (
-                  <div
-                    key={memberId}
-                    className="flex items-center justify-between rounded-lg border p-3"
+                  <Card
+                    key={debt.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedDebt(debt)}
                   >
-                    <span className="text-sm">
-                      {net > 0
-                        ? `${data.display_name} owes you`
-                        : `You owe ${data.display_name}`}
-                    </span>
-                    <span
-                      className={`text-sm font-semibold ${
-                        net > 0 ? "text-green-600" : "text-destructive"
-                      }`}
-                    >
-                      ${Math.abs(net).toFixed(2)}
-                    </span>
-                  </div>
+                    <CardHeader className="p-4 pb-2">
+                      <CardTitle className="text-base">{debt.bill_name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {debt.is_resolved ? "Paid" : "Outstanding"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 flex flex-col gap-1">
+                      <p className="text-xl font-bold">${remaining.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        of ${parseFloat(debt.amount).toFixed(2)} · Owed to {debt.user_owed.display_name}
+                      </p>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -151,10 +258,31 @@ export default function GroupPage({
         </section>
       </div>
 
-      <CreateBill
-        members={group.members.map((m) => ({ name: parseMemberName(m) }))}
+      {selectedVisibleBill && (
+        <BillDetailView
+          billName={selectedVisibleBill.name}
+          totalAmount={Number(selectedVisibleBill.amount) || 0}
+          debtors={buildDebtorsForBill(selectedVisibleBill)}
+          onClose={() => setSelectedBillId(null)}
+          onChangePaid={(debtor, nextPaid) =>
+            handleChangePaid(selectedVisibleBill.id, debtor, nextPaid)
+          }
+        />
+      )}
+
+        <CreateBill
+        members={group.members.map((m) => ({ name: m.display_name }))}
         open={billOpen}
         onOpenChange={handleBillClose}
+        onSave={handleCreateBillSaved}
+      />
+
+      <DebtDetail
+        debt={selectedDebt}
+        householdId={groupId}
+        open={selectedDebt !== null}
+        onOpenChange={(open: boolean) => { if (!open) setSelectedDebt(null); }}
+        onPaymentSubmitted={fetchData}
       />
     </div>
   );

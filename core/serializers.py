@@ -53,8 +53,9 @@ class HouseholdSerializer(serializers.ModelSerializer):
 
 class BillListSerializer(serializers.ModelSerializer):
     """Serializer for the Bill model. For use in returning lists of bills."""
-    
+
     users_owing = serializers.SerializerMethodField()
+    debts = serializers.SerializerMethodField()
 
     class Meta:
         model = Bill
@@ -64,6 +65,7 @@ class BillListSerializer(serializers.ModelSerializer):
             'amount',
             'date_created',
             'users_owing',
+            'debts',
         ]
 
     def get_users_owing(self, bill):
@@ -71,11 +73,29 @@ class BillListSerializer(serializers.ModelSerializer):
         users = [debt.user_owing for debt in bill.debts.all()]
         return UserSerializer(users, many=True).data
 
+    def get_debts(self, bill):
+        """Return per-debtor breakdown including amount owed and amount paid."""
+        result = []
+        for debt in bill.debts.all():
+            paid = sum(debt.payments.values_list('amount', flat=True))
+            result.append({
+                'id': debt.id,
+                'amount': str(debt.amount),
+                'paid_amount': str(paid),
+                'is_resolved': debt.is_resolved,
+                'user': {
+                    'id': debt.user_owing.id,
+                    'display_name': debt.user_owing.display_name,
+                    'email': debt.user_owing.email,
+                },
+            })
+        return result
+
 
 class BillDetailSerializer(serializers.ModelSerializer):
     """Serializer for the Bill model. For use in returning details of a bill."""
     
-    debts = serializers.SerializerMethodField()
+    #debts = serializers.SerializerMethodField()
 
     class Meta:
         model = Bill
@@ -96,6 +116,11 @@ class BillDetailSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     """Serializer for the Payment model."""
 
+    date_created = serializers.SerializerMethodField()
+    user_from = serializers.SerializerMethodField()
+    user_to = serializers.SerializerMethodField()
+    bill_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Payment
         fields = [
@@ -113,8 +138,8 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def get_bill_name(self, payment):
         """Return the name of the bill associated with this payment."""
-        return payment.bill.name
-    
+        return payment.debt.bill.name
+
     def get_user_from(self, payment):
         """Return the display name of the user making the payment."""
         return payment.user_paying.display_name
@@ -122,3 +147,30 @@ class PaymentSerializer(serializers.ModelSerializer):
     def get_user_to(self, payment):
         """Return the display name of the user receiving the payment."""
         return payment.debt.bill.user_owed.display_name
+
+class DebtSerializer(serializers.ModelSerializer):
+    """Serializer for the Debt model."""
+
+    user_owing = UserSerializer(read_only=True)
+    user_owed = UserSerializer(source='bill.user_owed', read_only=True)
+    bill_name = serializers.CharField(source='bill.name', read_only=True)
+    is_resolved = serializers.BooleanField(read_only=True)
+    paid_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Debt
+        fields = [
+            'id',
+            'amount',
+            'paid_amount',
+            'is_resolved',
+            'user_owing',
+            'user_owed',
+            'bill',
+            'bill_name',
+        ]
+
+    def get_paid_amount(self, debt):
+        """Sum of all payments made toward this debt."""
+        total = sum(debt.payments.values_list('amount', flat=True))
+        return str(total)
