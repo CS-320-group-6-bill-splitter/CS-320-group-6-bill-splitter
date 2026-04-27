@@ -79,11 +79,7 @@ class HouseholdListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """List all households the user is a member of, plus pending invitations.
-
-        Email comparison is case-insensitive: invites are stored lowercased
-        but Django's normalize_email() only lowercases the domain part of a
-        user's email, so the local part can differ in case.
+        """List all households the user is a member of, plus pending invitations
         """
         households = request.user.households.all()
         pending_invitations = HouseholdInvitation.objects.filter(
@@ -193,7 +189,7 @@ class HouseholdInviteView(APIView):
         )
 
         from django.conf import settings
-        accept_url = f"{getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:3000')}/invitations/{invitation.token}/respond"
+        accept_url = f"{getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:3000')}"
 
         send_mail(
             subject=f"You've been invited to join {household.name} on SplitSeas!",
