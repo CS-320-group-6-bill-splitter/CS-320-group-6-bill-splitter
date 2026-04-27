@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-sans);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -49,10 +49,10 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --background: #e8c87a;
+  --foreground: #012B43;
+  --card: #A0D2DB;
+  --card-foreground: #012B43;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
@@ -127,8 +127,26 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: var(--sand-grain);
+    background-repeat: repeat;
+    background-size: 200px 200px;
   }
   html {
     @apply font-sans;
   }
 }
+
+/* Grainy sand texture: a tiled SVG noise filter that overlays a brownish grain
+   on top of whatever bg color is set. feTurbulence procedurally generates the
+   noise; feColorMatrix tints it sandy brown with semi-transparency so grains
+   show through. stitchTiles=stitch makes the tile repeat seamlessly. */
+:root {
+  --sand-grain: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20200%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.9%22%20numOctaves%3D%222%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.30%20%200%200%200%200%200.18%20%200%200%200%200%200.05%20%200%200%200%200.55%200%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23n)%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.sand-bg {
+  background-image: var(--sand-grain);
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+

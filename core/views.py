@@ -3,7 +3,6 @@ import json
 from django.contrib.auth import authenticate, login, logout
 from django.core.mail import send_mail
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -80,10 +79,15 @@ class HouseholdListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """List all households the user is a member of, plus pending invitations."""
+        """List all households the user is a member of, plus pending invitations.
+
+        Email comparison is case-insensitive: invites are stored lowercased
+        but Django's normalize_email() only lowercases the domain part of a
+        user's email, so the local part can differ in case.
+        """
         households = request.user.households.all()
         pending_invitations = HouseholdInvitation.objects.filter(
-            email=request.user.email,
+            email__iexact=request.user.email,
             status=HouseholdInvitation.PENDING,
         )
         return Response({
@@ -221,7 +225,7 @@ class InvitationRespondView(APIView):
         invitation = get_object_or_404(
             HouseholdInvitation,
             token=token,
-            email=request.user.email,
+            email__iexact=request.user.email,
             status=HouseholdInvitation.PENDING,
         )
         action = request.data.get('action')
@@ -244,15 +248,19 @@ class BillListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, household_id):
-        """List all bills a user is owed for in a household."""
+        """List all bills the requesting user is owed for in a household.
+
+        Bills the user owes on (rather than is owed) are exposed via the
+        debts endpoint, not here.
+        """
         household = get_object_or_404(Household, id=household_id)
         if request.user not in household.members.all():
             return Response(
                 {'error': 'You are not a member of this household'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        bills = Bill.objects.filter((Q(user_owed=request.user) | Q(debts__user_owing=request.user)), household=household).distinct()
-        
+        bills = Bill.objects.filter(user_owed=request.user, household=household)
+
         serializer = BillListSerializer(bills, many=True)
 
         return Response(serializer.data)
@@ -264,7 +272,14 @@ class BillCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, household_id):
-        """Create a new bill in a household."""
+        """Create a new bill in a household.
+
+        Expects request body: {name, amount, debts: {user_id: amount, ...}}.
+        We do not pass `debts` through BillDetailSerializer because it would
+        be auto-generated as a read-only PrimaryKeyRelatedField from the
+        Debt.bill reverse relation, which can't accept the per-user dict
+        format the frontend sends.
+        """
         household = get_object_or_404(Household, id=household_id)
         if request.user not in household.members.all():
             return Response(
@@ -272,22 +287,38 @@ class BillCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = BillListSerializer(data=request.data)
-        if serializer.is_valid():
-            bill = Bill.objects.create_bill(
-                name=serializer.validated_data['name'],
-                household=household,
-                amount=serializer.validated_data['amount'],
-                user_owed=request.user,
-                debts=serializer.validated_data['debts'],
-            )
+        name = request.data.get('name')
+        amount = request.data.get('amount')
+        debts = request.data.get('debts', {})
 
-            return Response(
-                BillListSerializer(bill).data,
-                status=status.HTTP_201_CREATED,
-            )
+        if not name:
+            return Response({'error': 'name is required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if amount is None:
+            return Response({'error': 'amount is required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(debts, dict):
+            return Response({'error': 'debts must be an object mapping user id to amount'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            debts_normalized = {int(k): v for k, v in debts.items()}
+        except (TypeError, ValueError):
+            return Response({'error': 'debts keys must be user ids'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        bill = Bill.objects.create_bill(
+            name=name,
+            household=household,
+            amount=amount,
+            user_owed=request.user,
+            debts=debts_normalized,
+        )
+
+        return Response(
+            BillDetailSerializer(bill).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class BillDetailView(APIView):
@@ -397,6 +428,15 @@ class DebtPayView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, household_id, debt_id):
+        """Record a payment toward a debt.
+
+        The requester may be:
+          - the debtor themselves (`user_owing`), recording their own payment
+          - the creditor (the bill's `user_owed`), recording that the debtor
+            paid them (e.g. cash exchange happened in person).
+        The Payment.user_paying is always the debtor regardless of who
+        submitted the request.
+        """
         household = get_object_or_404(Household, id=household_id)
 
         if request.user not in household.members.all():
@@ -406,8 +446,13 @@ class DebtPayView(APIView):
             Debt,
             id=debt_id,
             bill__household=household,
-            user_owing=request.user
         )
+
+        if request.user != debt.user_owing and request.user != debt.bill.user_owed:
+            return Response(
+                {'error': 'Only the debtor or the creditor can record a payment for this debt'},
+                status=403,
+            )
 
         try:
             amount = float(request.data.get("amount"))
@@ -417,17 +462,21 @@ class DebtPayView(APIView):
         if amount <= 0:
             return Response({'error': 'Amount must be positive'}, status=400)
 
-        if amount > debt.amount:
-            return Response({'error': 'Cannot pay more than debt amount'}, status=400)
+        already_paid = sum(debt.payments.values_list("amount", flat=True))
+        remaining = float(debt.amount) - float(already_paid)
+        if amount > remaining:
+            return Response(
+                {'error': f'Cannot pay more than remaining debt (${remaining:.2f})'},
+                status=400,
+            )
 
         payment = Payment.objects.create_payment(
             amount=amount,
-            user_paying=request.user,
-            debt=debt
+            user_paying=debt.user_owing,
+            debt=debt,
         )
 
-        total_paid = sum(debt.payments.values_list("amount", flat=True))
-
+        total_paid = float(already_paid) + amount
         if total_paid >= float(debt.amount):
             debt.is_resolved = True
             debt.save()
@@ -451,7 +500,7 @@ class DebtFilterView(APIView):
         status_filter = request.query_params.get("status")
 
         if status_filter == "paid":
-            debts = debts.filter(is_resloved=True)
+            debts = debts.filter(is_resolved=True)
 
         elif status_filter == "unpaid":
             debts = debts.filter(is_resolved=False)

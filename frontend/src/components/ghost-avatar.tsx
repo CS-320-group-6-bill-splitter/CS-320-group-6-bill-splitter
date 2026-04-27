@@ -2,16 +2,13 @@
 
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { getInitials, parseMemberName } from "@/lib/utils";
 
-interface AvatarWithTooltipProps {
-  name: string;
+interface GhostAvatarProps {
+  email: string;
   className?: string;
 }
 
-export function AvatarWithTooltip({ name, className = "h-9 w-9" }: AvatarWithTooltipProps) {
-  const displayName = parseMemberName(name);
+export function GhostAvatar({ email, className = "h-9 w-9" }: GhostAvatarProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -28,18 +25,21 @@ export function AvatarWithTooltip({ name, className = "h-9 w-9" }: AvatarWithToo
         ref={ref}
         onMouseEnter={show}
         onMouseLeave={hide}
-        className="relative"
+        className={`${className} flex items-center justify-center rounded-full text-muted-foreground`}
+        style={{
+          border: "2px dashed currentColor",
+          opacity: 0.6,
+          fontSize: "inherit",
+        }}
       >
-        <Avatar className={className}>
-          <AvatarFallback>{getInitials(name)}</AvatarFallback>
-        </Avatar>
+        <span style={{ fontWeight: 700 }}>@</span>
       </div>
       {pos && typeof document !== "undefined" && createPortal(
         <div
           className="pointer-events-none fixed -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow ring-1 ring-foreground/10 z-[9999]"
           style={{ left: pos.x, top: pos.y }}
         >
-          {displayName}
+          {email} (pending)
         </div>,
         document.body,
       )}

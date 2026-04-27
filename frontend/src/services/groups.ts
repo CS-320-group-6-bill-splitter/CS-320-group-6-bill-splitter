@@ -1,8 +1,9 @@
 import { apiFetch } from "./api";
-import { Household, HouseholdSummary } from "@/types";
+import { Household, HouseholdSummary, HouseholdsResponse } from "@/types";
 
 export const groupsService = {
-  getAll: () => apiFetch<Household[]>("/households/"),
+  /** Returns memberships and pending invitations for the logged-in user. */
+  getAll: () => apiFetch<HouseholdsResponse>("/households/"),
 
   create: (data: { name: string }) =>
     apiFetch<Household>("/households/", {

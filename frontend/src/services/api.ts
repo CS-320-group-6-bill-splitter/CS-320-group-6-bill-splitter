@@ -16,8 +16,25 @@ export async function apiFetch<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || `API error: ${response.status}`);
+    const body = await response.json().catch(() => null);
+    let message: string | undefined;
+    if (body && typeof body === "object") {
+      if (typeof body.error === "string") {
+        message = body.error;
+      } else if (typeof body.detail === "string") {
+        message = body.detail;
+      } else {
+        // DRF validation errors come keyed by field, e.g. {"debts": ["..."]}.
+        // Flatten them into a readable string.
+        const parts: string[] = [];
+        for (const [field, errs] of Object.entries(body)) {
+          const text = Array.isArray(errs) ? errs.join(" ") : String(errs);
+          parts.push(`${field}: ${text}`);
+        }
+        if (parts.length > 0) message = parts.join(" | ");
+      }
+    }
+    throw new Error(message || `API error: ${response.status}`);
   }
 
   // Handle 204 No Content
