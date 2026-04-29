@@ -59,7 +59,7 @@ urlpatterns = [
     ),
 
     path(
-        'bills/list/<int:household_id>/',
+        'bills/list/<str:status>/<int:household_id>/',
         views.BillListView.as_view(),
         name='bill-list',
     ),
@@ -70,38 +70,34 @@ urlpatterns = [
     ),
 
     path(
-        'payments/list-bill/<int:bill_id>/',
-        views.PaymentListByBillView.as_view(),
-        name='payment-list-by-bill',
-    ),
-    
-    path(
-        'payments/list-debt/<int:debt_id>/',
-        views.PaymentListByDebtView.as_view(),
-        name='payment-list-by-debt',
-    ),
-    
-    path(
-        'debts/list/<int:household_id>/',
+        'debts/list/<str:status>/<int:household_id>/',
         views.DebtListView.as_view(),
         name='debt-list',
     ),
-    
     path(
         'debts/detail/<int:household_id>/<int:debt_id>/',
         views.DebtDetailView.as_view(),
         name='debt-detail',
     ),
-    
     path(
         'debts/pay/<int:household_id>/<int:debt_id>/',
         views.DebtPayView.as_view(),
         name='debt-pay',
     ),
-    
     path(
         'debts/filter/<int:household_id>/',
         views.DebtFilterView.as_view(),
         name='debt-filter',
+    ),
+
+    path(
+        'payments/list-bill/<int:bill_id>/',
+        views.PaymentListByBillView.as_view(),
+        name='payment-list-by-bill',
+    ),
+    path(
+        'payments/list-debt/<int:debt_id>/',
+        views.PaymentListByDebtView.as_view(),
+        name='payment-list-by-debt',
     )
 ]
