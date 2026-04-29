@@ -504,6 +504,7 @@ class DebtFilterView(APIView):
         return Response(DebtSerializer(debts, many=True).data)
       
 
+
 class BillsByPersonView(APIView):
     """
     gets bills in a household where the logged-in user is owed and the
