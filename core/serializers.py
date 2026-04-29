@@ -71,13 +71,14 @@ class DebtSerializer(serializers.ModelSerializer):
     user_owing = UserSerializer(read_only=True)
     user_owed = UserSerializer(source='bill.user_owed', read_only=True)
     bill_name = serializers.CharField(source='bill.name', read_only=True)
-    is_resolved = serializers.BooleanField(read_only=True)
+    paid_amount = serializers.FloatField(source='get_paid_amount', read_only=True)
 
     class Meta:
         model = Debt
         fields = [
             'id',
             'amount',
+            'paid_amount',
             'is_resolved',
             'user_owing',
             'user_owed',
@@ -85,12 +86,16 @@ class DebtSerializer(serializers.ModelSerializer):
             'bill_name',
         ]
 
+    def get_paid_amount(self, debt):
+        """Calculate total amount paid towards this debt."""
+        return sum(debt.payments.values_list('amount', flat=True))
+
 
 class BillListSerializer(serializers.ModelSerializer):
     """Serializer for the Bill model. For use in returning lists of bills."""
 
     users_owing = serializers.SerializerMethodField()
-    debts = serializers.SerializerMethodField()
+    debts = DebtSerializer(many=True, read_only=True)
 
     class Meta:
         model = Bill
@@ -107,24 +112,6 @@ class BillListSerializer(serializers.ModelSerializer):
         """Return a list of users who owe money for this bill."""
         users = [debt.user_owing for debt in bill.debts.all()]
         return UserSerializer(users, many=True).data
-
-    def get_debts(self, bill):
-        """Return per-debtor breakdown including amount owed and amount paid."""
-        result = []
-        for debt in bill.debts.all():
-            paid = sum(debt.payments.values_list('amount', flat=True))
-            result.append({
-                'id': debt.id,
-                'amount': str(debt.amount),
-                'paid_amount': str(paid),
-                'is_resolved': debt.is_resolved,
-                'user': {
-                    'id': debt.user_owing.id,
-                    'display_name': debt.user_owing.display_name,
-                    'email': debt.user_owing.email,
-                },
-            })
-        return result
 
 
 class BillDetailSerializer(serializers.ModelSerializer):
