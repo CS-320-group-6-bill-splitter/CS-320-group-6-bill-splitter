@@ -103,5 +103,16 @@ urlpatterns = [
         'debts/filter/<int:household_id>/',
         views.DebtFilterView.as_view(),
         name='debt-filter',
-    )
+    ),
+
+    path(
+        'bills/list/<int:household_id>/by-user/<int:other_user_id>/',
+        views.BillsByPersonView.as_view(),
+        name='bills-by-person',
+    ),
+    path(
+        'debts/list/<int:household_id>/by-user/<int:other_user_id>/',
+        views.DebtsByPersonView.as_view(),
+        name='debts-by-person',
+    ),
 ]

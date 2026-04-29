@@ -504,6 +504,71 @@ class DebtFilterView(APIView):
         return Response(DebtSerializer(debts, many=True).data)
       
 
+class BillsByPersonView(APIView):
+    """
+    gets bills in a household where the logged-in user is owed and the
+    specified other user has a debt on the bill, plus the total unpaid
+    amount that the other user owes
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, household_id, other_user_id):
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+        other_user = get_object_or_404(User, id=other_user_id)
+
+        bills = Bill.objects.filter(
+            household=household,
+            user_owed=request.user,
+            debts__user_owing=other_user,
+        ).distinct()
+
+        from django.db.models import Sum
+        they_owe_me = Debt.objects.filter(
+            bill__in=bills,
+            user_owing=other_user,
+            is_resolved=False,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        return Response({
+            'bills': BillListSerializer(bills, many=True).data,
+            'they_owe_me': they_owe_me,
+        })
+
+
+class DebtsByPersonView(APIView):
+    """
+    gets debts in a household that the logged-in user owes to the
+    specified other user, plus the total unpaid amount owed to the other user
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, household_id, other_user_id):
+        household = get_object_or_404(Household, id=household_id)
+        if request.user not in household.members.all():
+            return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+        other_user = get_object_or_404(User, id=other_user_id)
+
+        debts = Debt.objects.filter(
+            bill__household=household,
+            bill__user_owed=other_user,
+            user_owing=request.user,
+        ).distinct()
+
+        from django.db.models import Sum
+        i_owe_them = debts.filter(is_resolved=False).aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+
+        return Response({
+            'debts': DebtSerializer(debts, many=True).data,
+            'i_owe_them': i_owe_them,
+        })
+
+
 class PaymentListByBillView(APIView):
     """View for listing payments for a specific bill."""
 
