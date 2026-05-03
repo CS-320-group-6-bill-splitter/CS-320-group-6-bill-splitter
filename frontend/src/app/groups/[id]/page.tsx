@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect, useCallback } from "react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CreateBill from "@/components/modals/CreateBill";
 import BillDetailView, { Debtor } from "@/components/modals/BillDetailView";
@@ -26,7 +27,6 @@ export default function GroupPage({
   params: Promise<{ id: string }>;
 }) {
   const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
-  const [mockPaidByBill, setMockPaidByBill] = useState<Record<number, Record<number, number>>>({});
   const { id } = use(params);
   const groupId = Number(id);
   const [billOpen, setBillOpen] = useState(false);
@@ -86,64 +86,33 @@ export default function GroupPage({
 
   function buildDebtorsForBill(bill: Bill): Debtor[] {
     const debts = bill.debts ?? [];
-    if (debts.length === 0) return [];
-
-    const overrideMap = mockPaidByBill[bill.id] ?? {};
-
     return debts.map((d) => ({
       id: d.user_owing.id,
       debtId: d.id,
       name: d.user_owing.display_name,
       totalOwed: parseFloat(d.amount),
-      paidAmount: overrideMap[d.user_owing.id] ?? parseFloat(d.paid_amount),
+      paidAmount: parseFloat(d.paid_amount),
     }));
   }
 
-  async function handleChangePaid(billId: number, debtor: Debtor, nextPaid: number) {
-    // Optimistic UI update
-    setMockPaidByBill((prev) => ({
-      ...prev,
-      [billId]: {
-        ...(prev[billId] ?? {}),
-        [debtor.id]: nextPaid,
-      },
-    }));
-
-    // Mock bill (no real backend record) — local only
-    if (debtor.debtId < 0) return;
-
-    const delta = nextPaid - debtor.paidAmount;
-    if (delta === 0) return;
-    if (delta < 0) {
-      // Recording a negative payment isn't supported by the backend yet.
-      console.warn("Reducing paid amount is not supported");
-      return;
-    }
-
+  async function handleRenameBill(billId: number, newName: string) {
     try {
-      await debtsService.createPayment(groupId, debtor.debtId, { amount: delta });
+      await billsService.rename(groupId, billId, newName);
       await fetchData();
-      // Clear the optimistic override now that real data is fresh
-      setMockPaidByBill((prev) => {
-        const next = { ...prev };
-        if (next[billId]) {
-          const { [debtor.id]: _omit, ...rest } = next[billId];
-          next[billId] = rest;
-        }
-        return next;
-      });
     } catch (e) {
-      console.error("Failed to record payment:", e);
-      // Roll back optimistic update
-      setMockPaidByBill((prev) => {
-        const next = { ...prev };
-        if (next[billId]) {
-          const { [debtor.id]: _omit, ...rest } = next[billId];
-          next[billId] = rest;
-        }
-        return next;
-      });
-      alert(e instanceof Error ? e.message : "Could not record payment");
+      console.error("Failed to rename bill:", e);
+      alert(e instanceof Error ? e.message : "Could not rename bill");
+    }
+  }
+
+  async function handleDeleteBill(billId: number) {
+    try {
+      await billsService.delete(groupId, billId);
+      setSelectedBillId(null);
+      await fetchData();
+    } catch (e) {
+      console.error("Failed to delete bill:", e);
+      alert(e instanceof Error ? e.message : "Could not delete bill");
     }
   }
   async function handleCreateBillSaved(bill: {
@@ -208,9 +177,11 @@ export default function GroupPage({
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Bills section */}
         <section className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold">Your Bills</h2>
-            <Button size="sm" onClick={() => setBillOpen(true)}>Add Bill</Button>
+            <Button variant="ghost" size="icon" onClick={() => setBillOpen(true)}>
+              <Plus className="h-5 w-5" />
+            </Button>
           </div>
           <div className="flex gap-1">
             <Button
@@ -233,7 +204,7 @@ export default function GroupPage({
               {billsView === "unresolved" ? "No active bills." : "No resolved bills."}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto pt-6 pb-10">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-2 pt-6 pb-10">
               {bills.map((bill) => (
                 <Card
                   key={bill.id}
@@ -284,7 +255,7 @@ export default function GroupPage({
               {debtsView === "unresolved" ? "No active debts." : "No resolved debts."}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto pt-6 pb-10">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-2 pt-6 pb-10">
               {debts.map((debt) => {
                 const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
                 return (
@@ -319,9 +290,8 @@ export default function GroupPage({
           totalAmount={Number(selectedVisibleBill.amount) || 0}
           debtors={buildDebtorsForBill(selectedVisibleBill)}
           onClose={() => setSelectedBillId(null)}
-          onChangePaid={(debtor, nextPaid) =>
-            handleChangePaid(selectedVisibleBill.id, debtor, nextPaid)
-          }
+          onRename={(newName) => handleRenameBill(selectedVisibleBill.id, newName)}
+          onDelete={() => handleDeleteBill(selectedVisibleBill.id)}
         />
       )}
 

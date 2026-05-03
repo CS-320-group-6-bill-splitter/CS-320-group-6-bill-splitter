@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { AuthProvider } from "@/context/auth-context";
 import { Header } from "@/components/layout/header";
+import { HeaderShoreline } from "@/components/layout/header-shoreline";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col m-0 p-0 font-sans">
         <AuthProvider>
           <Header />
+          <HeaderShoreline />
           <main className="flex-1">{children}</main>
         </AuthProvider>
       </body>

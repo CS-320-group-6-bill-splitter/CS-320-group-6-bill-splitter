@@ -15,4 +15,15 @@ export const billsService = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  rename: (householdId: number, billId: number, name: string) =>
+    apiFetch<Bill>(`/bills/detail/${householdId}/${billId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+
+  delete: (householdId: number, billId: number) =>
+    apiFetch<void>(`/bills/detail/${householdId}/${billId}/`, {
+      method: "DELETE",
+    }),
 };

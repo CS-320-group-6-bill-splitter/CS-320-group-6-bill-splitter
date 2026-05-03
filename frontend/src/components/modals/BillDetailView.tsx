@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FC, useState } from "react";
+import React, { FC, useEffect, useState } from "react";
 
 const GREENS = ["#7EDBC0", "#40C9A2", "#2BA888", "#1D8A6E", "#136B55", "#0A4D3C"];
 const COLORS = {
@@ -8,6 +8,7 @@ const COLORS = {
   background: "#D9F2FF",
   inputBg: "#A0D2DB",
   button: "#012B43",
+  danger: "#B23A48",
 };
 
 export type Debtor = {
@@ -23,7 +24,8 @@ type BillDetailViewProps = {
   totalAmount: number;
   debtors: Debtor[];
   onClose: () => void;
-  onChangePaid: (debtor: Debtor, nextPaid: number) => void;
+  onRename: (newName: string) => void;
+  onDelete: () => void;
 };
 
 function personIcon(color: string) {
@@ -43,15 +45,33 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   totalAmount,
   debtors,
   onClose,
-  onChangePaid,
+  onRename,
+  onDelete,
 }) => {
-  const [paymentInputs, setPaymentInputs] = useState<Record<number, string>>({});
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(billName);
 
-  function handleApplyPaid(debtor: Debtor) {
-    const raw = paymentInputs[debtor.id];
-    const parsed = raw === undefined || raw === "" ? debtor.paidAmount : Number(raw);
-    if (Number.isNaN(parsed)) return;
-    onChangePaid(debtor, clamp(parsed, 0, debtor.totalOwed));
+  // Reset the draft whenever the parent's billName changes (e.g. after a
+  // successful rename refetch, or when switching between bills).
+  useEffect(() => {
+    setNameDraft(billName);
+    setEditingName(false);
+  }, [billName]);
+
+  function commitRename() {
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== billName) {
+      onRename(trimmed);
+    } else {
+      setNameDraft(billName);
+    }
+    setEditingName(false);
+  }
+
+  function handleDeleteClick() {
+    if (window.confirm(`Delete bill "${billName}"? This cannot be undone.`)) {
+      onDelete();
+    }
   }
 
   // Sum of what debtors owe — used as the bar denominator. The bill's
@@ -87,9 +107,37 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             animation: "pop 0.22s ease-out",
           }}
         >
-          <h2 style={{ margin: "0 0 8px", textAlign: "center", fontSize: "28px", fontWeight: 800, color: COLORS.text }}>
-            {billName}
-          </h2>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") {
+                  setNameDraft(billName);
+                  setEditingName(false);
+                }
+              }}
+              style={nameInputStyle}
+            />
+          ) : (
+            <h2
+              onClick={() => setEditingName(true)}
+              title="Click to rename"
+              style={{
+                margin: "0 0 8px",
+                textAlign: "center",
+                fontSize: "28px",
+                fontWeight: 800,
+                color: COLORS.text,
+                cursor: "pointer",
+              }}
+            >
+              {billName}
+            </h2>
+          )}
           <p style={{ textAlign: "center", color: COLORS.text, fontWeight: 700, fontSize: "22px", marginBottom: "28px" }}>
             ${totalAmount.toFixed(2)}
           </p>
@@ -200,57 +248,10 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Exact payment input controls */}
-          <div style={{ display: "grid", gap: "10px", marginBottom: "24px" }}>
-            {debtors.map((d) => {
-              const owedLeft = clamp(d.totalOwed - d.paidAmount, 0, d.totalOwed);
-              return (
-                <div
-                  key={d.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "10px",
-                    background: "rgba(1,43,67,0.06)",
-                  }}
-                >
-                  <div style={{ color: COLORS.text }}>
-                    <div style={{ fontWeight: 700 }}>{d.name}</div>
-                    <div style={{ fontSize: "13px" }}>
-                      Paid: ${d.paidAmount.toFixed(2)} / ${d.totalOwed.toFixed(2)} • Left: ${owedLeft.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      min={0}
-                      max={d.totalOwed}
-                      step="0.01"
-                      value={paymentInputs[d.id] ?? d.paidAmount.toFixed(2)}
-                      onChange={(e) =>
-                        setPaymentInputs((prev) => ({
-                          ...prev,
-                          [d.id]: e.target.value,
-                        }))
-                      }
-                      style={paidInputStyle}
-                    />
-                    <button
-                      style={smallBtn}
-                      onClick={() => handleApplyPaid(d)}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button onClick={handleDeleteClick} style={dangerButtonStyle}>
+              Delete Bill
+            </button>
             <button onClick={onClose} style={buttonStyle}>
               Close
             </button>
@@ -311,26 +312,30 @@ const buttonStyle: React.CSSProperties = {
   fontSize: "15px",
 };
 
-const smallBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: "8px",
-  border: "none",
-  background: "#012B43",
-  color: "#D9F2FF",
+const dangerButtonStyle: React.CSSProperties = {
+  padding: "10px 20px",
+  borderRadius: "12px",
+  background: "transparent",
+  color: COLORS.danger,
+  border: `2px solid ${COLORS.danger}`,
   cursor: "pointer",
   fontWeight: 700,
-  fontSize: "12px",
+  fontSize: "14px",
 };
 
-const paidInputStyle: React.CSSProperties = {
-  width: "110px",
-  padding: "6px 10px",
-  borderRadius: "8px",
-  border: "1px solid #7fb8c5",
+const nameInputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  margin: "0 0 8px",
+  padding: "4px 8px",
+  textAlign: "center",
+  fontSize: "28px",
+  fontWeight: 800,
+  color: COLORS.text,
   background: "#ffffff",
-  color: "#012B43",
-  fontSize: "12px",
-  fontWeight: 600,
+  border: `2px solid ${COLORS.button}`,
+  borderRadius: "8px",
+  outline: "none",
 };
 
 export default BillDetailView;
