@@ -22,4 +22,10 @@ export const debtsService = {
   /** List past payments for a debt. */
   getPayments: (debtId: number) =>
     apiFetch<DebtPayment[]>(`/payments/list-debt/${debtId}/`),
+
+  /** Debts you owe to the other user in this household. */
+  getByHouseholdAndUser: (householdId: number, otherUserId: number) =>
+    apiFetch<{ debts: Debt[]; i_owe_them: number }>(
+      `/debts/list/${householdId}/by-user/${otherUserId}/`
+    ),
 };

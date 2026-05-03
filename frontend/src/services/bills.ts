@@ -16,6 +16,11 @@ export const billsService = {
       body: JSON.stringify(body),
     }),
 
+  /** Bills where you are owed and the other user has a debt on the bill. */
+  getByHouseholdAndUser: (householdId: number, otherUserId: number) =>
+    apiFetch<{ bills: Bill[]; they_owe_me: number }>(
+      `/bills/list/${householdId}/by-user/${otherUserId}/`
+    ),
   rename: (householdId: number, billId: number, name: string) =>
     apiFetch<Bill>(`/bills/detail/${householdId}/${billId}/`, {
       method: "PATCH",

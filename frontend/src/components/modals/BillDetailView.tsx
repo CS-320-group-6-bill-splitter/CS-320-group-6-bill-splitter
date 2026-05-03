@@ -23,6 +23,8 @@ type BillDetailViewProps = {
   billName: string;
   totalAmount: number;
   debtors: Debtor[];
+  /** When set, only the Split Agreement section uses these rows (e.g. includes payer’s share). Payment progress + Apply still use `debtors`. */
+  splitDebtors?: Debtor[];
   onClose: () => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
@@ -44,6 +46,7 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   billName,
   totalAmount,
   debtors,
+  splitDebtors,
   onClose,
   onRename,
   onDelete,
@@ -51,6 +54,15 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(billName);
 
+  const agreementDebtors = splitDebtors ?? debtors;
+  const agreementTotal =
+    agreementDebtors.reduce((sum, d) => sum + d.totalOwed, 0) || 1;
+
+  function handleApplyPaid(debtor: Debtor) {
+    const raw = paymentInputs[debtor.id];
+    const parsed = raw === undefined || raw === "" ? debtor.paidAmount : Number(raw);
+    if (Number.isNaN(parsed)) return;
+    onChangePaid(debtor, clamp(parsed, 0, debtor.totalOwed));
   // Reset the draft whenever the parent's billName changes (e.g. after a
   // successful rename refetch, or when switching between bills).
   useEffect(() => {
@@ -146,15 +158,15 @@ const BillDetailView: FC<BillDetailViewProps> = ({
           <div style={{ marginBottom: "28px" }}>
             <label style={labelStyle}>Split Agreement</label>
             <div style={{ position: "relative", minHeight: "56px", marginBottom: "4px" }}>
-              {debtors.map((d, i) => {
+              {agreementDebtors.map((d, i) => {
                 const segmentColor = GREENS[i % GREENS.length];
-                const prevFractions = debtors
+                const prevFractions = agreementDebtors
                   .slice(0, i)
-                  .reduce((sum, curr) => sum + curr.totalOwed / debtorsTotal, 0);
-                const center = prevFractions + (d.totalOwed / debtorsTotal) / 2;
+                  .reduce((sum, curr) => sum + curr.totalOwed / agreementTotal, 0);
+                const center = prevFractions + (d.totalOwed / agreementTotal) / 2;
                 return (
                   <div
-                    key={d.id}
+                    key={`agreement-${d.debtId}-${d.id}`}
                     style={{
                       position: "absolute",
                       left: `${center * 100}%`,
@@ -174,11 +186,11 @@ const BillDetailView: FC<BillDetailViewProps> = ({
               })}
             </div>
             <div style={barContainerStyle}>
-              {debtors.map((d, i) => (
+              {agreementDebtors.map((d, i) => (
                 <div
-                  key={d.id}
+                  key={`agreement-bar-${d.debtId}-${d.id}`}
                   style={{
-                    width: `${(d.totalOwed / debtorsTotal) * 100}%`,
+                    width: `${(d.totalOwed / agreementTotal) * 100}%`,
                     background: GREENS[i % GREENS.length],
                     height: "100%",
                   }}
