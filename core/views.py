@@ -243,7 +243,7 @@ class BillListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, household_id):
+    def get(self, request, status, household_id):
         """List all bills the requesting user is owed for in a household.
 
         Bills the user owes on (rather than is owed) are exposed via the
@@ -255,7 +255,18 @@ class BillListView(APIView):
                 {'error': 'You are not a member of this household'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        bills = Bill.objects.filter(user_owed=request.user, household=household)
+
+        if status not in ['resolved', 'unresolved']:
+            return Response(
+                {'error': 'Invalid status filter. Use "resolved" or "unresolved".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bills = Bill.objects.filter(
+                user_owed=request.user,
+                household=household,
+                resolved=True if status == 'resolved' else False,
+            )
 
         serializer = BillListSerializer(bills, many=True)
 
@@ -350,7 +361,11 @@ class BillDetailView(APIView):
             )
 
         bill = get_object_or_404(Bill, id=bill_id, household=household)
-        serializer = BillListSerializer(bill, data={ 'name': request.data.get('name') }, partial=True)
+        serializer = BillListSerializer(
+            bill,
+            data={ 'name': request.data.get('name') },
+            partial=True,
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -381,24 +396,23 @@ class BillDetailView(APIView):
 class DebtListView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, household_id):
+    def get(self, request, status, household_id):
         household = get_object_or_404(Household, id=household_id)
 
         if request.user not in household.members.all():
             return Response({'error': 'Forbidden'}, status=403)
 
+        if status not in ["resolved", "unresolved"]:
+            return Response(
+                {'error': 'Invalid status filter. Use "resolved" or "unresolved".'},
+                status=400,
+            )
+        
         debts = Debt.objects.filter(
             bill__household=household,
-            user_owing=request.user
+            user_owing=request.user,
+            is_resolved=True if status == "resolved" else False,
         ).distinct()
-
-        status_filter = request.query_params.get("status")
-
-        if status_filter == "paid":
-            debts = debts.filter(is_resolved=True)
-
-        elif status_filter == "unpaid":
-            debts = debts.filter(is_resolved=False)
 
         return Response(DebtSerializer(debts, many=True).data)
 
