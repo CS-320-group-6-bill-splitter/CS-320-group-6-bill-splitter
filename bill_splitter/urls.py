@@ -68,6 +68,11 @@ urlpatterns = [
         views.BillCreateView.as_view(),
         name='bill-create',
     ),
+    path(
+        'bills/detail/<int:household_id>/<int:bill_id>/',
+        views.BillDetailView.as_view(),
+        name='bill-detail',
+    ),
 
     path(
         'debts/list/<str:status>/<int:household_id>/',

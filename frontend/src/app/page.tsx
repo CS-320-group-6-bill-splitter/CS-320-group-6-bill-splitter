@@ -270,7 +270,7 @@ function LoggedInView() {
           ) : groups.length === 0 && incomingInvites.length === 0 ? (
             <p className="text-sm text-muted-foreground">No groups yet. Create one to get started!</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto pt-6 pb-10">
+            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto px-2 pt-6 pb-10">
               {groups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -315,7 +315,7 @@ function LoggedInView() {
           {recentDebts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No recent debts.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto pt-6 pb-10">
+            <div className="flex flex-col gap-3 overflow-y-auto px-2 pt-6 pb-10">
               {recentDebts.map((debt) => {
                 const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
                 return (
