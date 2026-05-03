@@ -15,8 +15,8 @@ import {
 import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
 import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
-import { billsService } from "@/services/bills";
-import { debtsService } from "@/services/debts";
+import { billsService, type BillStatus } from "@/services/bills";
+import { debtsService, type DebtStatus } from "@/services/debts";
 import { Household, Bill, Debt, HouseholdSummary } from "@/types";
 import { parseMemberName } from "@/lib/utils";
 
@@ -37,26 +37,45 @@ export default function GroupPage({
   const [loading, setLoading] = useState(true);
 
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [billsView, setBillsView] = useState<BillStatus>("unresolved");
+  const [debtsView, setDebtsView] = useState<DebtStatus>("unresolved");
 
   const pendingInvites = (group?.pending_invitations ?? []).map((inv) => inv.email);
 
   const fetchData = useCallback(() => {
+    groupsService.getById(groupId)
+      .then(setGroup)
+      .catch(() => setGroup(null))
+      .finally(() => setLoading(false));
+    billsService.getByHousehold(groupId, billsView)
+      .then(setBills)
+      .catch(() => setBills([]));
+    debtsService.getByHousehold(groupId, debtsView)
+      .then(setDebts)
+      .catch(() => setDebts([]));
+  }, [groupId, billsView, debtsView]);
+
+  // Initial group load — kept separate so toggling filters doesn't re-trigger
+  // the full-page loading spinner.
+  useEffect(() => {
     setLoading(true);
     groupsService.getById(groupId)
       .then(setGroup)
       .catch(() => setGroup(null))
       .finally(() => setLoading(false));
-    billsService.getByHousehold(groupId)
-      .then(setBills)
-      .catch(() => setBills([]));
-    debtsService.getByHousehold(groupId)
-      .then(setDebts)
-      .catch(() => setDebts([]));
   }, [groupId]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    billsService.getByHousehold(groupId, billsView)
+      .then(setBills)
+      .catch(() => setBills([]));
+  }, [groupId, billsView]);
+
+  useEffect(() => {
+    debtsService.getByHousehold(groupId, debtsView)
+      .then(setDebts)
+      .catch(() => setDebts([]));
+  }, [groupId, debtsView]);
 
   function handleBillClose(open: boolean) {
     setBillOpen(open);
@@ -72,11 +91,11 @@ export default function GroupPage({
     const overrideMap = mockPaidByBill[bill.id] ?? {};
 
     return debts.map((d) => ({
-      id: d.user.id,
+      id: d.user_owing.id,
       debtId: d.id,
-      name: d.user.display_name,
+      name: d.user_owing.display_name,
       totalOwed: parseFloat(d.amount),
-      paidAmount: overrideMap[d.user.id] ?? parseFloat(d.paid_amount),
+      paidAmount: overrideMap[d.user_owing.id] ?? parseFloat(d.paid_amount),
     }));
   }
 
@@ -169,7 +188,7 @@ export default function GroupPage({
   }
 
   return (
-    <div className="flex h-screen flex-col gap-4 p-6 pt-20 overflow-hidden">
+    <div className="flex h-screen flex-col gap-4 px-24 py-6 pt-20 overflow-hidden">
       {/* Members section */}
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">
@@ -189,14 +208,32 @@ export default function GroupPage({
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Bills section */}
         <section className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between px-6">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Your Bills</h2>
             <Button size="sm" onClick={() => setBillOpen(true)}>Add Bill</Button>
           </div>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant={billsView === "unresolved" ? "default" : "outline"}
+              onClick={() => setBillsView("unresolved")}
+            >
+              Active
+            </Button>
+            <Button
+              size="sm"
+              variant={billsView === "resolved" ? "default" : "outline"}
+              onClick={() => setBillsView("resolved")}
+            >
+              Resolved
+            </Button>
+          </div>
           {bills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bills yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {billsView === "unresolved" ? "No active bills." : "No resolved bills."}
+            </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto pt-6 pb-10">
               {bills.map((bill) => (
                 <Card
                   key={bill.id}
@@ -225,11 +262,29 @@ export default function GroupPage({
 
         {/* Your Debts section */}
         <section className="flex flex-1 flex-col gap-3">
-          <h2 className="text-lg font-semibold px-6">Your Debts</h2>
+          <h2 className="text-lg font-semibold">Your Debts</h2>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant={debtsView === "unresolved" ? "default" : "outline"}
+              onClick={() => setDebtsView("unresolved")}
+            >
+              Active
+            </Button>
+            <Button
+              size="sm"
+              variant={debtsView === "resolved" ? "default" : "outline"}
+              onClick={() => setDebtsView("resolved")}
+            >
+              Resolved
+            </Button>
+          </div>
           {debts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No debts yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {debtsView === "unresolved" ? "No active debts." : "No resolved debts."}
+            </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 pt-6 pb-10">
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto pt-6 pb-10">
               {debts.map((debt) => {
                 const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
                 return (

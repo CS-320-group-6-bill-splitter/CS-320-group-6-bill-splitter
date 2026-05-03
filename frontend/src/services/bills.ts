@@ -1,9 +1,11 @@
 import { apiFetch } from "./api";
 import { Bill } from "@/types";
 
+export type BillStatus = "unresolved" | "resolved";
+
 export const billsService = {
-  getByHousehold: (householdId: number) =>
-    apiFetch<Bill[]>(`/bills/list/${householdId}/`),
+  getByHousehold: (householdId: number, status: BillStatus = "unresolved") =>
+    apiFetch<Bill[]>(`/bills/list/${status}/${householdId}/`),
 
   create: (
     householdId: number,

@@ -71,7 +71,7 @@ class DebtSerializer(serializers.ModelSerializer):
     user_owing = UserSerializer(read_only=True)
     user_owed = UserSerializer(source='bill.user_owed', read_only=True)
     bill_name = serializers.CharField(source='bill.name', read_only=True)
-    paid_amount = serializers.FloatField(source='get_paid_amount', read_only=True)
+    paid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Debt

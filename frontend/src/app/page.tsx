@@ -254,12 +254,12 @@ function LoggedInView() {
   }
 
   return (
-    <div className="flex h-screen flex-col gap-6 p-6 pt-20 overflow-hidden">
+    <div className="flex h-screen flex-col gap-6 px-24 py-6 pt-20 overflow-hidden">
       <CreateGroupModal open={createOpen} onOpenChange={handleCreateClose} />
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Groups section — left side */}
         <section className="flex flex-1 flex-col gap-4">
-          <div className="flex items-center gap-2 px-6">
+          <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Your Groups</h1>
             <Button variant="ghost" size="icon" onClick={() => setCreateOpen(true)}>
               <Plus className="h-5 w-5" />
@@ -270,7 +270,7 @@ function LoggedInView() {
           ) : groups.length === 0 && incomingInvites.length === 0 ? (
             <p className="text-sm text-muted-foreground">No groups yet. Create one to get started!</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto px-6 pt-6 pb-10">
+            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto pt-6 pb-10">
               {groups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -311,11 +311,11 @@ function LoggedInView() {
 
         {/* Recent Debts section — right side */}
         <section className="flex w-80 shrink-0 flex-col gap-4">
-          <h2 className="text-2xl font-bold px-6">Recent Debts</h2>
+          <h2 className="text-2xl font-bold">Recent Debts</h2>
           {recentDebts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No recent debts.</p>
           ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto px-6 pt-6 pb-10">
+            <div className="flex flex-col gap-3 overflow-y-auto pt-6 pb-10">
               {recentDebts.map((debt) => {
                 const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
                 return (
