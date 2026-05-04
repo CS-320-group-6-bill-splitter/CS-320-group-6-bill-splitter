@@ -65,11 +65,10 @@ export interface Split {
 export interface DebtPayment {
   id: number;
   amount: string;
-  date_created: string;
-  user_from: string;
-  user_to: string;
+  date: string;
+  user_from: User;
+  user_to: User;
   bill_name: string;
-  // method: TBD — backend Payment model doesn't store payment method yet
 }
 
 // Matches backend DebtSerializer

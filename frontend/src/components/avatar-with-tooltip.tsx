@@ -36,8 +36,22 @@ export function AvatarWithTooltip({ name, className = "h-9 w-9" }: AvatarWithToo
       </div>
       {pos && typeof document !== "undefined" && createPortal(
         <div
-          className="pointer-events-none fixed -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-popover px-2 py-1 text-xs text-popover-foreground shadow ring-1 ring-foreground/10 z-[9999]"
-          style={{ left: pos.x, top: pos.y }}
+          style={{
+            position: "fixed",
+            left: pos.x,
+            top: pos.y,
+            transform: "translate(-50%, -100%)",
+            background: "#012B43",
+            color: "#D9F2FF",
+            padding: "8px 14px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontWeight: 600,
+            zIndex: 9999,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          }}
         >
           {displayName}
         </div>,

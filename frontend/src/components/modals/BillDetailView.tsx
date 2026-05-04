@@ -1,6 +1,7 @@
 "use client";
 
 import React, { FC, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 
 const GREENS = ["#7EDBC0", "#40C9A2", "#2BA888", "#1D8A6E", "#136B55", "#0A4D3C"];
 const COLORS = {
@@ -58,13 +59,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   const agreementTotal =
     agreementDebtors.reduce((sum, d) => sum + d.totalOwed, 0) || 1;
 
-  function handleApplyPaid(debtor: Debtor) {
-    const raw = paymentInputs[debtor.id];
-    const parsed = raw === undefined || raw === "" ? debtor.paidAmount : Number(raw);
-    if (Number.isNaN(parsed)) return;
-    onChangePaid(debtor, clamp(parsed, 0, debtor.totalOwed));
-  // Reset the draft whenever the parent's billName changes (e.g. after a
-  // successful rename refetch, or when switching between bills).
   useEffect(() => {
     setNameDraft(billName);
     setEditingName(false);
@@ -94,7 +88,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   return (
     <>
       <div
-        onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
@@ -107,7 +100,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "560px",
             maxHeight: "90vh",
@@ -117,8 +109,59 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             background: COLORS.background,
             boxShadow: "0 20px 60px rgba(1,43,67,0.25)",
             animation: "pop 0.22s ease-out",
+            position: "relative",
           }}
         >
+          {/* Close button — the only way to exit this modal */}
+          <button
+            onClick={onClose}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "20px",
+              color: COLORS.text,
+              fontWeight: 700,
+              lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
+            }}
+            aria-label="Close"
+          >
+            &times;
+          </button>
+
+          {/* Delete bill button — square trashcan, mirrors the X on the top-left */}
+          <button
+            onClick={handleDeleteClick}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "14px",
+              left: "14px",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: `2px solid ${COLORS.danger}`,
+              borderRadius: "6px",
+              cursor: "pointer",
+              color: COLORS.danger,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease, background 0.15s ease",
+            }}
+            aria-label="Delete bill"
+          >
+            <Trash2 size={16} strokeWidth={2.25} />
+          </button>
           {editingName ? (
             <input
               autoFocus
@@ -260,14 +303,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button onClick={handleDeleteClick} style={dangerButtonStyle}>
-              Delete Bill
-            </button>
-            <button onClick={onClose} style={buttonStyle}>
-              Close
-            </button>
-          </div>
         </div>
       </div>
 
@@ -311,28 +346,6 @@ const progressValueStyle: React.CSSProperties = {
   fontSize: "11px",
   fontWeight: 800,
   pointerEvents: "none",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "10px 28px",
-  borderRadius: "12px",
-  background: COLORS.button,
-  color: COLORS.background,
-  border: "none",
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: "15px",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "10px 20px",
-  borderRadius: "12px",
-  background: "transparent",
-  color: COLORS.danger,
-  border: `2px solid ${COLORS.danger}`,
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: "14px",
 };
 
 const nameInputStyle: React.CSSProperties = {

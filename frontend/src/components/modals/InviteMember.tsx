@@ -23,7 +23,6 @@ export default function InviteMember({ open, onOpenChange, onSend }: InviteMembe
   return (
     <>
       <div
-        onClick={() => onOpenChange(false)}
         style={{
           position: "fixed",
           inset: 0,
@@ -36,7 +35,6 @@ export default function InviteMember({ open, onOpenChange, onSend }: InviteMembe
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "420px",
             padding: "32px 36px 28px",
@@ -47,9 +45,11 @@ export default function InviteMember({ open, onOpenChange, onSend }: InviteMembe
             position: "relative",
           }}
         >
-          {/* Close button */}
+          {/* Close button — the only way to exit this modal */}
           <button
             onClick={() => onOpenChange(false)}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
             style={{
               position: "absolute",
               top: "16px",
@@ -61,6 +61,8 @@ export default function InviteMember({ open, onOpenChange, onSend }: InviteMembe
               color: "#012B43",
               fontWeight: 700,
               lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
             }}
             aria-label="Close"
           >

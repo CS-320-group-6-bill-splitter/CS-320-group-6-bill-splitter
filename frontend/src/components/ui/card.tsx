@@ -72,7 +72,7 @@ function Card({
     >
       <div
         style={maskStyle}
-        className="flex flex-col gap-4 overflow-hidden bg-card py-8 px-3 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-6 data-[size=sm]:has-data-[slot=card-footer]:pb-0"
+        className="flex h-full flex-col gap-4 overflow-hidden bg-card py-8 px-3 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-6 data-[size=sm]:has-data-[slot=card-footer]:pb-0"
       >
         {children}
       </div>

@@ -6,13 +6,6 @@ import { Button } from "@/components/ui/button";
 import CreateBill from "@/components/modals/CreateBill";
 import BillDetailView, { Debtor } from "@/components/modals/BillDetailView";
 import DebtDetail from "@/components/modals/DebtDetail";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 import { AvatarWithTooltip } from "@/components/avatar-with-tooltip";
 import { GhostAvatar } from "@/components/ghost-avatar";
 import { groupsService } from "@/services/groups";
@@ -33,13 +26,24 @@ export default function GroupPage({
   const [billOpen, setBillOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [group, setGroup] = useState<Household | null>(null);
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [billsByStatus, setBillsByStatus] = useState<Record<BillStatus, Bill[]>>({
+    unresolved: [],
+    resolved: [],
+  });
+  const [debtsByStatus, setDebtsByStatus] = useState<Record<DebtStatus, Debt[]>>({
+    unresolved: [],
+    resolved: [],
+  });
   const [summary, setSummary] = useState<HouseholdSummary>({});
   const [loading, setLoading] = useState(true);
 
-  const [debts, setDebts] = useState<Debt[]>([]);
   const [billsView, setBillsView] = useState<BillStatus>("unresolved");
   const [debtsView, setDebtsView] = useState<DebtStatus>("unresolved");
+
+  // Render the currently-selected status from cache; toggling between Active
+  // and Resolved is a pure state read with no network round-trip.
+  const bills = billsByStatus[billsView];
+  const debts = debtsByStatus[debtsView];
 
   const { user: authUser } = useAuth();
   const [memberPanelMember, setMemberPanelMember] = useState<{
@@ -48,27 +52,45 @@ export default function GroupPage({
   } | null>(null);
   const [memberPanelBills, setMemberPanelBills] = useState<Bill[]>([]);
   const [memberPanelDebts, setMemberPanelDebts] = useState<Debt[]>([]);
-  const [memberPanelTheyOwe, setMemberPanelTheyOwe] = useState<number | null>(null);
-  const [memberPanelIOwe, setMemberPanelIOwe] = useState<number | null>(null);
   const [memberPanelLoading, setMemberPanelLoading] = useState(false);
 
   const pendingInvites = (group?.pending_invitations ?? []).map((inv) => inv.email);
+
+  // Fetch both Active and Resolved buckets in parallel and cache them. Toggling
+  // the filter is then a free local state read; no fetch required.
+  const fetchBills = useCallback(() => {
+    Promise.all([
+      billsService.getByHousehold(groupId, "unresolved"),
+      billsService.getByHousehold(groupId, "resolved"),
+    ])
+      .then(([unresolved, resolved]) =>
+        setBillsByStatus({ unresolved, resolved })
+      )
+      .catch(() => setBillsByStatus({ unresolved: [], resolved: [] }));
+  }, [groupId]);
+
+  const fetchDebts = useCallback(() => {
+    Promise.all([
+      debtsService.getByHousehold(groupId, "unresolved"),
+      debtsService.getByHousehold(groupId, "resolved"),
+    ])
+      .then(([unresolved, resolved]) =>
+        setDebtsByStatus({ unresolved, resolved })
+      )
+      .catch(() => setDebtsByStatus({ unresolved: [], resolved: [] }));
+  }, [groupId]);
 
   const fetchData = useCallback(() => {
     groupsService.getById(groupId)
       .then(setGroup)
       .catch(() => setGroup(null))
       .finally(() => setLoading(false));
-    billsService.getByHousehold(groupId, billsView)
-      .then(setBills)
-      .catch(() => setBills([]));
-    debtsService.getByHousehold(groupId, debtsView)
-      .then(setDebts)
-      .catch(() => setDebts([]));
-  }, [groupId, billsView, debtsView]);
+    fetchBills();
+    fetchDebts();
+  }, [groupId, fetchBills, fetchDebts]);
 
-  // Initial group load — kept separate so toggling filters doesn't re-trigger
-  // the full-page loading spinner.
+  // Initial group load — kept separate so it doesn't re-trigger the full-page
+  // loading spinner when bills/debts refetch.
   useEffect(() => {
     setLoading(true);
     groupsService.getById(groupId)
@@ -78,23 +100,17 @@ export default function GroupPage({
   }, [groupId]);
 
   useEffect(() => {
-    billsService.getByHousehold(groupId, billsView)
-      .then(setBills)
-      .catch(() => setBills([]));
-  }, [groupId, billsView]);
+    fetchBills();
+  }, [fetchBills]);
 
   useEffect(() => {
-    debtsService.getByHousehold(groupId, debtsView)
-      .then(setDebts)
-      .catch(() => setDebts([]));
-  }, [groupId, debtsView]);
+    fetchDebts();
+  }, [fetchDebts]);
 
   useEffect(() => {
     if (!memberPanelMember) {
       setMemberPanelBills([]);
       setMemberPanelDebts([]);
-      setMemberPanelTheyOwe(null);
-      setMemberPanelIOwe(null);
       return;
     }
     let cancelled = false;
@@ -107,15 +123,11 @@ export default function GroupPage({
         if (cancelled) return;
         setMemberPanelBills(billsRes.bills ?? []);
         setMemberPanelDebts(debtsRes.debts ?? []);
-        setMemberPanelTheyOwe(Number(billsRes.they_owe_me) || 0);
-        setMemberPanelIOwe(Number(debtsRes.i_owe_them) || 0);
       })
       .catch(() => {
         if (cancelled) return;
         setMemberPanelBills([]);
         setMemberPanelDebts([]);
-        setMemberPanelTheyOwe(null);
-        setMemberPanelIOwe(null);
       })
       .finally(() => {
         if (!cancelled) setMemberPanelLoading(false);
@@ -165,25 +177,6 @@ export default function GroupPage({
     return [payerRow, ...debtRows];
   }
 
-  async function handleChangePaid(billId: number, debtor: Debtor, nextPaid: number) {
-    // Optimistic UI update
-    setMockPaidByBill((prev) => ({
-      ...prev,
-      [billId]: {
-        ...(prev[billId] ?? {}),
-        [debtor.id]: nextPaid,
-      },
-    }));
-
-    // Mock bill (no real backend record) — local only
-    if (debtor.debtId < 0) return;
-
-    const delta = nextPaid - debtor.paidAmount;
-    if (delta === 0) return;
-    if (delta < 0) {
-      // Recording a negative payment isn't supported by the backend yet.
-      console.warn("Reducing paid amount is not supported");
-      return;
   async function handleRenameBill(billId: number, newName: string) {
     try {
       await billsService.rename(groupId, billId, newName);
@@ -312,36 +305,51 @@ export default function GroupPage({
               Resolved
             </Button>
           </div>
-          {bills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {billsView === "unresolved" ? "No active bills." : "No resolved bills."}
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-2 pt-6 pb-10">
-              {bills.map((bill) => (
-                <Card
-                  key={bill.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedBillId(bill.id)}
-                >
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-base">{bill.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {new Date(bill.date_created).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 flex flex-col gap-1">
-                    <p className="text-xl font-bold">${bill.amount}</p>
-                    {bill.users_owing.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Owed by: {bill.users_owing.map((u) => u.display_name).join(", ")}
-                      </p>
+          <div
+            className="flex-1 min-h-0 flex flex-col rounded-lg overflow-hidden"
+            style={{
+              backgroundColor: "#7a6528",
+              boxShadow:
+                "0 0 24px 8px rgba(122, 101, 40, 0.45), 0 0 60px 20px rgba(122, 101, 40, 0.25), 0 0 120px 40px rgba(122, 101, 40, 0.1), inset 0 0 40px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            {bills.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-[#fdf6e3]/60">
+                  {billsView === "unresolved" ? "No active bills." : "No resolved bills."}
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto text-[#fdf6e3] py-2">
+                {bills.map((bill, idx) => (
+                  <div
+                    key={bill.id}
+                    onClick={() => setSelectedBillId(bill.id)}
+                    className="relative cursor-pointer px-6 py-4 hover:bg-white/5 transition-colors flex items-start justify-between gap-4"
+                  >
+                    {idx > 0 && (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute top-0 left-[15%] right-[15%] h-px bg-[#fdf6e3]/15"
+                      />
                     )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="text-base font-medium truncate">{bill.name}</div>
+                      <div className="text-xs text-[#fdf6e3]/70">
+                        {new Date(bill.date_created).toLocaleDateString()}
+                      </div>
+                      {bill.users_owing.length > 0 && (
+                        <div className="text-xs text-[#fdf6e3]/70 truncate">
+                          Owed by: {bill.users_owing.map((u) => u.display_name).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xl font-bold shrink-0">${bill.amount}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Your Debts section */}
@@ -363,37 +371,57 @@ export default function GroupPage({
               Resolved
             </Button>
           </div>
-          {debts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {debtsView === "unresolved" ? "No active debts." : "No resolved debts."}
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-2 pt-6 pb-10">
-              {debts.map((debt) => {
-                const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
-                return (
-                  <Card
-                    key={debt.id}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedDebt(debt)}
-                  >
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-base">{debt.bill_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {debt.is_resolved ? "Paid" : "Outstanding"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex flex-col gap-1">
-                      <p className="text-xl font-bold">${remaining.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        of ${parseFloat(debt.amount).toFixed(2)} · Owed to {debt.user_owed.display_name}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <div
+            className="flex-1 min-h-0 flex flex-col rounded-lg overflow-hidden"
+            style={{
+              backgroundColor: "#7a6528",
+              boxShadow:
+                "0 0 24px 8px rgba(122, 101, 40, 0.45), 0 0 60px 20px rgba(122, 101, 40, 0.25), 0 0 120px 40px rgba(122, 101, 40, 0.1), inset 0 0 40px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            {debts.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-[#fdf6e3]/60">
+                  {debtsView === "unresolved" ? "No active debts." : "No resolved debts."}
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto text-[#fdf6e3] py-2">
+                {debts.map((debt, idx) => {
+                  const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
+                  return (
+                    <div
+                      key={debt.id}
+                      onClick={() => setSelectedDebt(debt)}
+                      className="relative cursor-pointer px-6 py-4 hover:bg-white/5 transition-colors flex items-start justify-between gap-4"
+                    >
+                      {idx > 0 && (
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute top-0 left-[15%] right-[15%] h-px bg-[#fdf6e3]/15"
+                        />
+                      )}
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="text-base font-medium truncate">{debt.bill_name}</div>
+                        <div className="text-xs text-[#fdf6e3]/70">
+                          {debt.is_resolved ? "Paid" : "Outstanding"}
+                        </div>
+                        <div className="text-xs text-[#fdf6e3]/70 truncate">
+                          Owed to {debt.user_owed.display_name}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0">
+                        <div className="text-xl font-bold">${remaining.toFixed(2)}</div>
+                        <div className="text-xs text-[#fdf6e3]/70">
+                          of ${parseFloat(debt.amount).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
@@ -427,40 +455,61 @@ export default function GroupPage({
       {memberPanelMember && (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4"
-          onClick={() => setMemberPanelMember(null)}
           role="presentation"
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-hidden rounded-lg border bg-background p-6 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+            className="relative flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-hidden rounded-lg border bg-background p-6 shadow-lg"
             role="dialog"
             aria-labelledby="member-panel-title"
           >
-            <div className="flex items-start justify-between gap-2">
+            {/* Close button — the only way to exit this modal */}
+            <button
+              onClick={() => setMemberPanelMember(null)}
+              aria-label="Close"
+              className="absolute right-3 top-3 cursor-pointer text-xl font-bold leading-none text-foreground origin-center transition-transform duration-150 hover:scale-125"
+            >
+              &times;
+            </button>
+            <div className="flex items-start justify-between gap-2 pr-8">
               <div>
                 <h3 id="member-panel-title" className="text-lg font-semibold">
                   With {parseMemberName(memberPanelMember.display_name)}
                 </h3>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setMemberPanelMember(null)}>
-                Close
-              </Button>
             </div>
             {memberPanelLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : (
+            ) : (() => {
+              // Compute unpaid totals from the fetched data so payments made
+              // are subtracted. Backend's they_owe_me / i_owe_them sum the
+              // gross debt.amount for unresolved debts and ignore paid_amount.
+              const theyOweRemaining = memberPanelBills.reduce((sum, b) => {
+                const theirDebt = b.debts?.find(
+                  (d) => d.user_owing.id === memberPanelMember.id
+                );
+                if (!theirDebt) return sum;
+                const owed = parseFloat(theirDebt.amount) || 0;
+                const paid = parseFloat(theirDebt.paid_amount) || 0;
+                return sum + Math.max(0, owed - paid);
+              }, 0);
+              const iOweRemaining = memberPanelDebts.reduce((sum, d) => {
+                const owed = parseFloat(d.amount) || 0;
+                const paid = parseFloat(d.paid_amount) || 0;
+                return sum + Math.max(0, owed - paid);
+              }, 0);
+              return (
               <>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-md border p-3">
                     <p className="text-muted-foreground">They owe you (unpaid)</p>
                     <p className="text-lg font-semibold">
-                      ${(memberPanelTheyOwe ?? 0).toFixed(2)}
+                      ${theyOweRemaining.toFixed(2)}
                     </p>
                   </div>
                   <div className="rounded-md border p-3">
                     <p className="text-muted-foreground">You owe them (unpaid)</p>
                     <p className="text-lg font-semibold">
-                      ${(memberPanelIOwe ?? 0).toFixed(2)}
+                      ${iOweRemaining.toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -475,11 +524,17 @@ export default function GroupPage({
                           const theirDebt = b.debts?.find(
                             (d) => d.user_owing.id === memberPanelMember.id
                           );
-                          const share = parseFloat(
+                          const owed = parseFloat(
                             String(theirDebt?.amount ?? b.amount)
                           );
-                          const shareLabel = Number.isFinite(share)
-                            ? share.toFixed(2)
+                          const paid = parseFloat(
+                            String(theirDebt?.paid_amount ?? "0")
+                          );
+                          const remaining = Number.isFinite(owed)
+                            ? Math.max(0, owed - (paid || 0))
+                            : NaN;
+                          const shareLabel = Number.isFinite(remaining)
+                            ? remaining.toFixed(2)
                             : String(b.amount);
                           return (
                           <li
@@ -504,27 +559,33 @@ export default function GroupPage({
                       <p className="text-xs text-muted-foreground">None.</p>
                     ) : (
                       <ul className="space-y-2 text-sm">
-                        {memberPanelDebts.map((d) => (
-                          <li
-                            key={d.id}
-                            className="flex cursor-pointer justify-between rounded-md border px-3 py-2 hover:bg-muted/50"
-                            onClick={() => {
-                              setMemberPanelMember(null);
-                              setSelectedDebt(d);
-                            }}
-                          >
-                            <span>{d.bill_name}</span>
-                            <span className="text-muted-foreground">
-                              ${parseFloat(d.amount).toFixed(2)}
-                            </span>
-                          </li>
-                        ))}
+                        {memberPanelDebts.map((d) => {
+                          const owed = parseFloat(d.amount) || 0;
+                          const paid = parseFloat(d.paid_amount) || 0;
+                          const remaining = Math.max(0, owed - paid);
+                          return (
+                            <li
+                              key={d.id}
+                              className="flex cursor-pointer justify-between rounded-md border px-3 py-2 hover:bg-muted/50"
+                              onClick={() => {
+                                setMemberPanelMember(null);
+                                setSelectedDebt(d);
+                              }}
+                            >
+                              <span>{d.bill_name}</span>
+                              <span className="text-muted-foreground">
+                                ${remaining.toFixed(2)}
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </div>
                 </div>
               </>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}

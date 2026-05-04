@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useAuth } from "@/context/auth-context";
 
 type Member = {
   name: string;
@@ -51,9 +52,18 @@ function personIcon(color: string) {
 }
 
 export default function CreateBill({ members = [], open, onOpenChange, onSave }: CreateBillProps) {
+  const { user: authUser } = useAuth();
+  // Default the "Paid By" dropdown to the logged-in user (the bill creator),
+  // falling back to the first listed member if for any reason they aren't
+  // present in the household member list.
+  const defaultPayer =
+    members.find((m) => m.name === authUser?.display_name)?.name ??
+    members[0]?.name ??
+    "";
+
   const [expenseName, setExpenseName] = useState("");
   const [amount, setAmount] = useState("");
-  const [paidBy, setPaidBy] = useState(members[0]?.name ?? "");
+  const [paidBy, setPaidBy] = useState(defaultPayer);
 
   const n = members.length || 1;
   const initDividers = useCallback(
@@ -66,9 +76,9 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
 
   useEffect(() => {
     setDividers(initDividers());
-    setPaidBy(members[0]?.name ?? "");
+    setPaidBy(defaultPayer);
     setEditText({});
-  }, [members, initDividers]);
+  }, [members, initDividers, defaultPayer]);
 
   /**
    * Set segment `idx` to fraction `f` (clamped to [0,1]) and redistribute the
@@ -194,7 +204,6 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
     <>
       {/* Modal */}
       <div
-        onClick={() => onOpenChange(false)}
         style={{
           position: "fixed",
           inset: 0,
@@ -207,7 +216,6 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "460px",
             padding: "32px 36px 28px",
@@ -220,6 +228,30 @@ export default function CreateBill({ members = [], open, onOpenChange, onSave }:
             overflowY: "auto",
           }}
         >
+          {/* Close button — the only way to exit this modal */}
+          <button
+            onClick={() => onOpenChange(false)}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "20px",
+              color: "#012B43",
+              fontWeight: 700,
+              lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
+            }}
+            aria-label="Close"
+          >
+            &times;
+          </button>
+
           <h2
             style={{
               margin: "0 0 24px",
