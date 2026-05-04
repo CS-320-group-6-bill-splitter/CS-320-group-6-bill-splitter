@@ -1,12 +1,12 @@
 import { apiFetch } from "./api";
 import { Debt, DebtPayment } from "@/types";
 
+export type DebtStatus = "unresolved" | "resolved";
+
 export const debtsService = {
   /** List debts the logged-in user owes within a household. */
-  getByHousehold: (householdId: number, statusFilter?: "paid" | "unpaid") => {
-    const qs = statusFilter ? `?status=${statusFilter}` : "";
-    return apiFetch<Debt[]>(`/debts/list/${householdId}/${qs}`);
-  },
+  getByHousehold: (householdId: number, status: DebtStatus = "unresolved") =>
+    apiFetch<Debt[]>(`/debts/list/${status}/${householdId}/`),
 
   /** Get a single debt by id. */
   getById: (householdId: number, debtId: number) =>
@@ -22,4 +22,10 @@ export const debtsService = {
   /** List past payments for a debt. */
   getPayments: (debtId: number) =>
     apiFetch<DebtPayment[]>(`/payments/list-debt/${debtId}/`),
+
+  /** Debts you owe to the other user in this household. */
+  getByHouseholdAndUser: (householdId: number, otherUserId: number) =>
+    apiFetch<{ debts: Debt[]; i_owe_them: number }>(
+      `/debts/list/${householdId}/by-user/${otherUserId}/`
+    ),
 };

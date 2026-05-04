@@ -7,8 +7,27 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
+  // Project-wide modal policy: the X close button is the only legal way to
+  // dismiss a Dialog. Outside clicks are blocked via `disablePointerDismissal`,
+  // and escape-key closes are filtered out here.
+  const handleOpenChange = React.useCallback<
+    NonNullable<DialogPrimitive.Root.Props["onOpenChange"]>
+  >(
+    (open, eventDetails) => {
+      if (!open && eventDetails.reason === "escape-key") return;
+      onOpenChange?.(open, eventDetails);
+    },
+    [onOpenChange]
+  );
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      disablePointerDismissal
+      onOpenChange={handleOpenChange}
+      {...props}
+    />
+  );
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -65,7 +84,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                className="absolute top-2 right-2 origin-center transition-transform duration-150 hover:scale-125"
                 size="icon-sm"
               />
             }

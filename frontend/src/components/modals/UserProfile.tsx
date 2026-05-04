@@ -18,7 +18,6 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
     <>
       {/* Backdrop */}
       <div
-        onClick={() => onOpenChange(false)}
         style={{
           position: "fixed",
           inset: 0,
@@ -32,7 +31,6 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
       >
         {/* Card */}
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "380px",
             padding: "32px 36px 28px",
@@ -43,6 +41,30 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
             position: "relative",
           }}
         >
+          {/* Close button — the only way to exit this modal */}
+          <button
+            onClick={() => onOpenChange(false)}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "20px",
+              color: "#012B43",
+              fontWeight: 700,
+              lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
+            }}
+            aria-label="Close"
+          >
+            &times;
+          </button>
+
           {/* Title */}
           <h2
             style={{
@@ -118,37 +140,6 @@ export default function UserProfile({ user, open, onOpenChange }: UserProfilePro
             ))}
           </div>
 
-          {/* Footer */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-            }}
-          >
-            <button
-              onClick={() => onOpenChange(false)}
-              style={{
-                padding: "10px 22px",
-                borderRadius: "12px",
-                background: "#012B43",
-                color: "#D9F2FF",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: "15px",
-                transition: "background 0.15s ease",
-              }}
-              onMouseOver={(e) =>
-                (e.currentTarget.style.background = "#014060")
-              }
-              onMouseOut={(e) =>
-                (e.currentTarget.style.background = "#012B43")
-              }
-            >
-              close
-            </button>
-          </div>
         </div>
       </div>
 

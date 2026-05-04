@@ -42,22 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [registerOpen, setRegisterOpen] = useState(false);
 
   async function login(email: string, password: string) {
-    const res = await authService.login(email, password);
-    setUser({
-      id: 0,
-      email,
-      display_name: res.display_name,
-      profile_picture: res.profile_picture,
-    });
+    await authService.login(email, password);
+    const me = await authService.me();
+    setUser(me);
   }
 
   async function register(email: string, password: string, name: string) {
-    const res = await authService.register(email, password, name);
-    setUser({
-      id: 0,
-      email,
-      display_name: res.display_name,
-    });
+    await authService.register(email, password, name);
+    const me = await authService.me();
+    setUser(me);
   }
 
   function logout() {

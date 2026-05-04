@@ -31,15 +31,14 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
     setInputValue("");
     setPaymentMethod(PAYMENT_METHODS[0]);
     if (debt) {
-      // Prefer payments already attached to the debt (avoids extra round-trip);
-      // otherwise fetch them. Falls back to [] on error so the modal still renders.
-      if (debt.payments) {
-        setPayments(debt.payments);
-      } else {
-        debtsService.getPayments(debt.id)
-          .then(setPayments)
-          .catch(() => setPayments([]));
-      }
+      // Always fetch fresh — DebtSerializer doesn't include `payments` on the
+      // wire, and stale cached payments would mis-render the slider segments.
+      debtsService.getPayments(debt.id)
+        .then(setPayments)
+        .catch((err) => {
+          console.error("Failed to load payments for debt", debt.id, err);
+          setPayments([]);
+        });
     } else {
       setPayments([]);
     }
@@ -134,7 +133,6 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
   return (
     <>
       <div
-        onClick={() => onOpenChange(false)}
         style={{
           position: "fixed",
           inset: 0,
@@ -147,7 +145,6 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "480px",
             padding: "32px 36px 28px",
@@ -160,9 +157,11 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
             overflowY: "auto",
           }}
         >
-          {/* Close button */}
+          {/* Close button — the only way to exit this modal */}
           <button
             onClick={() => onOpenChange(false)}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
             style={{
               position: "absolute",
               top: "16px",
@@ -174,6 +173,8 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
               color: "#012B43",
               fontWeight: 700,
               lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
             }}
             aria-label="Close"
           >
@@ -404,22 +405,26 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
             </div>
             <button
               onClick={async () => {
-                if (!debt || paymentAmount <= 0) {
-                  onOpenChange(false);
-                  return;
-                }
+                if (!debt || paymentAmount <= 0) return;
                 try {
                   // Backend currently only accepts `amount`. The selected
                   // `paymentMethod` is captured here for when the Payment
                   // model adds a method field.
+                  //
+                  // Cap the sent amount at the exact unrounded `remaining` —
+                  // `paymentAmount` was rounded via toFixed(2) for display,
+                  // which can round UP past the backend's float remaining
+                  // (e.g. 0.00999... rounds to "0.01") and trigger a
+                  // "Cannot pay more than remaining debt" rejection.
+                  const sendAmount = Math.min(paymentAmount, remaining);
                   await debtsService.createPayment(householdId, debt.id, {
-                    amount: paymentAmount,
+                    amount: sendAmount,
                   });
                   onPaymentSubmitted?.();
+                  onOpenChange(false);
                 } catch (err) {
                   console.error("Failed to submit payment:", err);
                 }
-                onOpenChange(false);
               }}
               style={{
                 padding: "12px 28px",
@@ -468,7 +473,7 @@ export default function DebtDetail({ debt, householdId, open, onOpenChange, onPa
         >
           <div>${parseFloat(hoveredPayment.amount).toFixed(2)}</div>
           <div style={{ color: "#A0D2DB", fontSize: "11px", marginTop: "2px" }}>
-            {new Date(hoveredPayment.date_created).toLocaleDateString(undefined, {
+            {new Date(hoveredPayment.date).toLocaleDateString(undefined, {
               year: "numeric",
               month: "short",
               day: "numeric",

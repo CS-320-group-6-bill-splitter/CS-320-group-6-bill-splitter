@@ -1,6 +1,7 @@
 "use client";
 
-import React, { FC, useState } from "react";
+import React, { FC, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 
 const GREENS = ["#7EDBC0", "#40C9A2", "#2BA888", "#1D8A6E", "#136B55", "#0A4D3C"];
 const COLORS = {
@@ -8,6 +9,7 @@ const COLORS = {
   background: "#D9F2FF",
   inputBg: "#A0D2DB",
   button: "#012B43",
+  danger: "#B23A48",
 };
 
 export type Debtor = {
@@ -22,8 +24,11 @@ type BillDetailViewProps = {
   billName: string;
   totalAmount: number;
   debtors: Debtor[];
+  /** When set, only the Split Agreement section uses these rows (e.g. includes payer’s share). Payment progress + Apply still use `debtors`. */
+  splitDebtors?: Debtor[];
   onClose: () => void;
-  onChangePaid: (debtor: Debtor, nextPaid: number) => void;
+  onRename: (newName: string) => void;
+  onDelete: () => void;
 };
 
 function personIcon(color: string) {
@@ -42,16 +47,37 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   billName,
   totalAmount,
   debtors,
+  splitDebtors,
   onClose,
-  onChangePaid,
+  onRename,
+  onDelete,
 }) => {
-  const [paymentInputs, setPaymentInputs] = useState<Record<number, string>>({});
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(billName);
 
-  function handleApplyPaid(debtor: Debtor) {
-    const raw = paymentInputs[debtor.id];
-    const parsed = raw === undefined || raw === "" ? debtor.paidAmount : Number(raw);
-    if (Number.isNaN(parsed)) return;
-    onChangePaid(debtor, clamp(parsed, 0, debtor.totalOwed));
+  const agreementDebtors = splitDebtors ?? debtors;
+  const agreementTotal =
+    agreementDebtors.reduce((sum, d) => sum + d.totalOwed, 0) || 1;
+
+  useEffect(() => {
+    setNameDraft(billName);
+    setEditingName(false);
+  }, [billName]);
+
+  function commitRename() {
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== billName) {
+      onRename(trimmed);
+    } else {
+      setNameDraft(billName);
+    }
+    setEditingName(false);
+  }
+
+  function handleDeleteClick() {
+    if (window.confirm(`Delete bill "${billName}"? This cannot be undone.`)) {
+      onDelete();
+    }
   }
 
   // Sum of what debtors owe — used as the bar denominator. The bill's
@@ -62,7 +88,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
   return (
     <>
       <div
-        onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
@@ -75,7 +100,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
           style={{
             width: "560px",
             maxHeight: "90vh",
@@ -85,11 +109,90 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             background: COLORS.background,
             boxShadow: "0 20px 60px rgba(1,43,67,0.25)",
             animation: "pop 0.22s ease-out",
+            position: "relative",
           }}
         >
-          <h2 style={{ margin: "0 0 8px", textAlign: "center", fontSize: "28px", fontWeight: 800, color: COLORS.text }}>
-            {billName}
-          </h2>
+          {/* Close button — the only way to exit this modal */}
+          <button
+            onClick={onClose}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "20px",
+              color: COLORS.text,
+              fontWeight: 700,
+              lineHeight: 1,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease",
+            }}
+            aria-label="Close"
+          >
+            &times;
+          </button>
+
+          {/* Delete bill button — square trashcan, mirrors the X on the top-left */}
+          <button
+            onClick={handleDeleteClick}
+            onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
+            onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            style={{
+              position: "absolute",
+              top: "14px",
+              left: "14px",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: `2px solid ${COLORS.danger}`,
+              borderRadius: "6px",
+              cursor: "pointer",
+              color: COLORS.danger,
+              transformOrigin: "center",
+              transition: "transform 0.15s ease, background 0.15s ease",
+            }}
+            aria-label="Delete bill"
+          >
+            <Trash2 size={16} strokeWidth={2.25} />
+          </button>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") {
+                  setNameDraft(billName);
+                  setEditingName(false);
+                }
+              }}
+              style={nameInputStyle}
+            />
+          ) : (
+            <h2
+              onClick={() => setEditingName(true)}
+              title="Click to rename"
+              style={{
+                margin: "0 0 8px",
+                textAlign: "center",
+                fontSize: "28px",
+                fontWeight: 800,
+                color: COLORS.text,
+                cursor: "pointer",
+              }}
+            >
+              {billName}
+            </h2>
+          )}
           <p style={{ textAlign: "center", color: COLORS.text, fontWeight: 700, fontSize: "22px", marginBottom: "28px" }}>
             ${totalAmount.toFixed(2)}
           </p>
@@ -98,15 +201,15 @@ const BillDetailView: FC<BillDetailViewProps> = ({
           <div style={{ marginBottom: "28px" }}>
             <label style={labelStyle}>Split Agreement</label>
             <div style={{ position: "relative", minHeight: "56px", marginBottom: "4px" }}>
-              {debtors.map((d, i) => {
+              {agreementDebtors.map((d, i) => {
                 const segmentColor = GREENS[i % GREENS.length];
-                const prevFractions = debtors
+                const prevFractions = agreementDebtors
                   .slice(0, i)
-                  .reduce((sum, curr) => sum + curr.totalOwed / debtorsTotal, 0);
-                const center = prevFractions + (d.totalOwed / debtorsTotal) / 2;
+                  .reduce((sum, curr) => sum + curr.totalOwed / agreementTotal, 0);
+                const center = prevFractions + (d.totalOwed / agreementTotal) / 2;
                 return (
                   <div
-                    key={d.id}
+                    key={`agreement-${d.debtId}-${d.id}`}
                     style={{
                       position: "absolute",
                       left: `${center * 100}%`,
@@ -126,11 +229,11 @@ const BillDetailView: FC<BillDetailViewProps> = ({
               })}
             </div>
             <div style={barContainerStyle}>
-              {debtors.map((d, i) => (
+              {agreementDebtors.map((d, i) => (
                 <div
-                  key={d.id}
+                  key={`agreement-bar-${d.debtId}-${d.id}`}
                   style={{
-                    width: `${(d.totalOwed / debtorsTotal) * 100}%`,
+                    width: `${(d.totalOwed / agreementTotal) * 100}%`,
                     background: GREENS[i % GREENS.length],
                     height: "100%",
                   }}
@@ -200,61 +303,6 @@ const BillDetailView: FC<BillDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Exact payment input controls */}
-          <div style={{ display: "grid", gap: "10px", marginBottom: "24px" }}>
-            {debtors.map((d) => {
-              const owedLeft = clamp(d.totalOwed - d.paidAmount, 0, d.totalOwed);
-              return (
-                <div
-                  key={d.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "10px",
-                    background: "rgba(1,43,67,0.06)",
-                  }}
-                >
-                  <div style={{ color: COLORS.text }}>
-                    <div style={{ fontWeight: 700 }}>{d.name}</div>
-                    <div style={{ fontSize: "13px" }}>
-                      Paid: ${d.paidAmount.toFixed(2)} / ${d.totalOwed.toFixed(2)} • Left: ${owedLeft.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      min={0}
-                      max={d.totalOwed}
-                      step="0.01"
-                      value={paymentInputs[d.id] ?? d.paidAmount.toFixed(2)}
-                      onChange={(e) =>
-                        setPaymentInputs((prev) => ({
-                          ...prev,
-                          [d.id]: e.target.value,
-                        }))
-                      }
-                      style={paidInputStyle}
-                    />
-                    <button
-                      style={smallBtn}
-                      onClick={() => handleApplyPaid(d)}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={onClose} style={buttonStyle}>
-              Close
-            </button>
-          </div>
         </div>
       </div>
 
@@ -300,37 +348,19 @@ const progressValueStyle: React.CSSProperties = {
   pointerEvents: "none",
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: "10px 28px",
-  borderRadius: "12px",
-  background: COLORS.button,
-  color: COLORS.background,
-  border: "none",
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: "15px",
-};
-
-const smallBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: "8px",
-  border: "none",
-  background: "#012B43",
-  color: "#D9F2FF",
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: "12px",
-};
-
-const paidInputStyle: React.CSSProperties = {
-  width: "110px",
-  padding: "6px 10px",
-  borderRadius: "8px",
-  border: "1px solid #7fb8c5",
+const nameInputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  margin: "0 0 8px",
+  padding: "4px 8px",
+  textAlign: "center",
+  fontSize: "28px",
+  fontWeight: 800,
+  color: COLORS.text,
   background: "#ffffff",
-  color: "#012B43",
-  fontSize: "12px",
-  fontWeight: 600,
+  border: `2px solid ${COLORS.button}`,
+  borderRadius: "8px",
+  outline: "none",
 };
 
 export default BillDetailView;

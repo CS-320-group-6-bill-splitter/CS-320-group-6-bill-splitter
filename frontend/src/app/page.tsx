@@ -15,13 +15,6 @@ import { Plus, ChevronDown } from "lucide-react";
 import { Household, Debt, Invite } from "@/types";
 import { debtsService } from "@/services/debts";
 import { invitesService } from "@/services/invites";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 
 function easeInOutSine(t: number) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
@@ -254,12 +247,12 @@ function LoggedInView() {
   }
 
   return (
-    <div className="flex h-screen flex-col gap-6 p-6 pt-20 overflow-hidden">
+    <div className="flex h-screen flex-col gap-6 px-24 py-6 pt-20 overflow-hidden">
       <CreateGroupModal open={createOpen} onOpenChange={handleCreateClose} />
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Groups section — left side */}
         <section className="flex flex-1 flex-col gap-4">
-          <div className="flex items-center gap-2 px-6">
+          <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Your Groups</h1>
             <Button variant="ghost" size="icon" onClick={() => setCreateOpen(true)}>
               <Plus className="h-5 w-5" />
@@ -270,7 +263,7 @@ function LoggedInView() {
           ) : groups.length === 0 && incomingInvites.length === 0 ? (
             <p className="text-sm text-muted-foreground">No groups yet. Create one to get started!</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 overflow-y-auto px-6 pt-6 pb-10">
+            <div className="grid gap-4 sm:grid-cols-2 auto-rows-fr -ml-8 overflow-y-auto px-8 pt-6 pb-10">
               {groups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -311,36 +304,53 @@ function LoggedInView() {
 
         {/* Recent Debts section — right side */}
         <section className="flex w-80 shrink-0 flex-col gap-4">
-          <h2 className="text-2xl font-bold px-6">Recent Debts</h2>
-          {recentDebts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recent debts.</p>
-          ) : (
-            <div className="flex flex-col gap-3 overflow-y-auto px-6 pt-6 pb-10">
-              {recentDebts.map((debt) => {
-                const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
-                return (
-                  <Card
-                    key={debt.id}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedDebt(debt)}
-                  >
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-base">{debt.bill_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {debt.householdName} · Owed to {debt.user_owed.display_name}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <p className="text-xl font-bold">${remaining.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        of ${parseFloat(debt.amount).toFixed(2)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <h2 className="text-2xl font-bold">Recent Debts</h2>
+          <div
+            className="flex-1 min-h-0 flex flex-col rounded-lg overflow-hidden"
+            style={{
+              backgroundColor: "#7a6528",
+              boxShadow:
+                "0 0 24px 8px rgba(122, 101, 40, 0.45), 0 0 60px 20px rgba(122, 101, 40, 0.25), 0 0 120px 40px rgba(122, 101, 40, 0.1), inset 0 0 40px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            {recentDebts.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-[#fdf6e3]/60">No recent debts.</p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto text-[#fdf6e3] py-2">
+                {recentDebts.map((debt, idx) => {
+                  const remaining = parseFloat(debt.amount) - parseFloat(debt.paid_amount);
+                  return (
+                    <div
+                      key={debt.id}
+                      onClick={() => setSelectedDebt(debt)}
+                      className="relative cursor-pointer px-6 py-4 hover:bg-white/5 transition-colors flex items-start justify-between gap-4"
+                    >
+                      {idx > 0 && (
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute top-0 left-[15%] right-[15%] h-px bg-[#fdf6e3]/15"
+                        />
+                      )}
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="text-base font-medium truncate">{debt.bill_name}</div>
+                        <div className="text-xs text-[#fdf6e3]/70 truncate">
+                          {debt.householdName} · Owed to {debt.user_owed.display_name}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0">
+                        <div className="text-xl font-bold">${remaining.toFixed(2)}</div>
+                        <div className="text-xs text-[#fdf6e3]/70">
+                          of ${parseFloat(debt.amount).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 

@@ -28,16 +28,16 @@ export interface HouseholdSummary {
   };
 }
 
+// Bill.debts is serialized with DebtSerializer on the backend, so each entry
+// has the same shape as a Debt minus the bill-related fields we don't need
+// when the parent bill is already in scope.
 export interface BillDebt {
   id: number;
   amount: string;
   paid_amount: string;
   is_resolved: boolean;
-  user: {
-    id: number;
-    display_name: string;
-    email: string;
-  };
+  user_owing: User;
+  user_owed: User;
 }
 
 export interface Bill {
@@ -65,11 +65,10 @@ export interface Split {
 export interface DebtPayment {
   id: number;
   amount: string;
-  date_created: string;
-  user_from: string;
-  user_to: string;
+  date: string;
+  user_from: User;
+  user_to: User;
   bill_name: string;
-  // method: TBD — backend Payment model doesn't store payment method yet
 }
 
 // Matches backend DebtSerializer
