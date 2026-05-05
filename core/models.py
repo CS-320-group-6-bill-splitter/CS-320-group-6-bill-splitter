@@ -307,6 +307,7 @@ class PaymentManager(models.Manager):
         )
         payment.save(using=self._db)
         payment.debt.update(payment.amount)
+        payment.debt.bill.update()
         return payment
 
 
